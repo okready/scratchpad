@@ -11,6 +11,9 @@ readme = "README.md"
 categories = ["memory-management", "no-std"]
 keywords = ["stack", "pool", "memory", "allocator", "no_std"]
 
+[badges]
+travis-ci = { repository = "okready/scratchpad" }
+
 [features]
 default = ["std"]
 

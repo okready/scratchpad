@@ -4,6 +4,8 @@ scratchpad
 A Rust library providing a stack-like dynamic memory pool with double-ended
 allocation support.
 
+[![Build Status](https://travis-ci.org/okready/scratchpad.svg?branch=master)](https://travis-ci.org/okready/scratchpad)
+
 Features include:
 
 - User-defined backing storage of data (static arrays, boxed slices, or

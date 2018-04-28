@@ -1,0 +1,26 @@
+language: rust
+sudo: false
+
+rust:
+# Explicitly test against minimum Rust version to avoid accidentally breaking
+# compatibility.
+- 1.25.0
+- stable
+- beta
+- nightly
+env:
+- FEATURE_ARGS=""
+- FEATURE_ARGS="--lib --no-default-features"
+
+matrix:
+  include:
+  - rust: nightly
+    env: FEATURE_ARGS="--lib --no-default-features --features unstable"
+
+script:
+- cargo test $FEATURE_ARGS --verbose
+- cargo test $FEATURE_ARGS --verbose --release
+
+notifications:
+  email:
+    on_success: never
