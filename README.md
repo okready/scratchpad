@@ -6,6 +6,9 @@ allocation support.
 
 [![Build Status](https://travis-ci.org/okready/scratchpad.svg?branch=master)](https://travis-ci.org/okready/scratchpad)
 
+- [Documentation](https://docs.rs/scratchpad)
+- [Release notes](https://github.com/okready/scratchpad/releases)
+
 Features include:
 
 - User-defined backing storage of data (static arrays, boxed slices, or
