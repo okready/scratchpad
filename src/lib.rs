@@ -29,21 +29,25 @@
 //! [`Scratchpad`] provides a method for quick and safe dynamic allocations of
 //! arbitrary types without relying on the global heap (e.g. using [`Box`] or
 //! [`Vec`]). Allocations are made from a fixed-size region of memory in a
-//! stack-like fashion, with each allocation using the memory immediately
-//! following the previous allocation. The allocation stack is double-ended,
-//! allowing allocations to be made at both the front and back of the stack.
+//! stack-like fashion using two separate stacks (one for each end of the
+//! allocation buffer) to allow different types of allocations with possibly
+//! overlapping lifecycles to be made from each end.
 //!
 //! Groups of allocations are partitioned using [`Marker`] objects. Markers
 //! can be set at the [front][`mark_front()`] or [back][`mark_back()`] of a
 //! scratchpad. Allocations can be made from either a front or back marker as
-//! long as it is the most-recently created active marker of that type.
+//! long as it is the most-recently created active marker of that type (e.g.
+//! creating and allocating from a back marker still allows you to allocate
+//! from the most recent front marker, but creating a new front marker blocks
+//! allocations from previous front markers until the newer front marker is
+//! dropped).
 //!
 //! No memory is actually freed until the marker is dropped (although an
 //! item's [`Drop`] implementation is still called if necessary when the
 //! allocation is dropped). Markers can be dropped in any order, but the
 //! memory is not made available for reuse until any subsequently set markers
-//! have also been dropped. This behavior allows allocations and frees to be
-//! performed relatively quickly.
+//! of the same type (front versus back) have also been dropped. This behavior
+//! allows allocations and frees to be performed relatively quickly.
 //!
 //! Some cases for which [`Scratchpad`] can be useful include:
 //!
@@ -62,8 +66,9 @@
 //!   only for the duration in which the level is active. Such allocations can
 //!   be made by setting a marker for the level and dropping it when the level
 //!   is unloaded. Other allocations with overlapping lifecycles, such as
-//!   those persisting across levels, can also be set at the other end of the
-//!   same scratchpad at the same time.
+//!   those persisting across levels, or temporary allocations needed while
+//!   loading into one end of the scratchpad, can also be set at the other end
+//!   of the same scratchpad at the same time.
 //!
 //! # Crate Features
 //!
