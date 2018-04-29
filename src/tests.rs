@@ -38,8 +38,8 @@ where
 }
 
 // `PartialEq` implementation for comparing the `Marker` offsets in a
-// `MarkerDeque` against a pair of slices of expected offsets for unit tests.
-impl<T, U, TrackingT> PartialEq<(T, U)> for MarkerDeque<TrackingT>
+// `MarkerStacks` against a pair of slices of expected offsets for unit tests.
+impl<T, U, TrackingT> PartialEq<(T, U)> for MarkerStacks<TrackingT>
 where
     T: AsRef<[usize]>,
     U: AsRef<[usize]>,

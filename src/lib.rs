@@ -880,26 +880,26 @@ where
     }
 }
 
-/// Double-ended queue for `Marker` tracking (used internally).
-struct MarkerDeque<TrackingT>
+/// Front and back stacks for `Marker` tracking (used internally).
+struct MarkerStacks<TrackingT>
 where
     TrackingT: Tracking,
 {
-    /// Deque data.
+    /// Stack data.
     data: TrackingT,
-    /// Front deque offset.
+    /// Front stack offset.
     front: usize,
-    /// Back deque offset.
+    /// Back stack offset.
     back: usize,
 }
 
-impl<TrackingT> fmt::Debug for MarkerDeque<TrackingT>
+impl<TrackingT> fmt::Debug for MarkerStacks<TrackingT>
 where
     TrackingT: Tracking,
 {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "MarkerDeque {{ ... }}")
+        write!(f, "MarkerStacks {{ ... }}")
     }
 }
 
@@ -1882,11 +1882,12 @@ where
 {
     /// Buffer from which allocations are made.
     buffer: UnsafeCell<BufferT>,
-    /// Deque containing the offsets of each active marker. If a marker not at
-    /// one of the ends of the stack is freed, its offset is set to
+    /// Dual stack containing the offsets of each active marker. If a marker
+    /// not at the end of one of the stacks is freed, its offset is set to
     /// `core::usize::MAX` to indicate it is no longer active until the
-    /// allocations that came after it have also been freed.
-    markers: RefCell<MarkerDeque<TrackingT>>,
+    /// allocations that came after it (in the same stack) have also been
+    /// freed.
+    markers: RefCell<MarkerStacks<TrackingT>>,
 }
 
 impl<BufferT, TrackingT> Scratchpad<BufferT, TrackingT>
@@ -1916,7 +1917,7 @@ where
     pub const fn new(buffer: BufferT, tracking: TrackingT) -> Self {
         Scratchpad {
             buffer: UnsafeCell::new(buffer),
-            markers: RefCell::new(MarkerDeque {
+            markers: RefCell::new(MarkerStacks {
                 data: tracking,
                 front: 0,
                 back: core::usize::MAX, // Lazy initialization.
@@ -1946,7 +1947,7 @@ where
     pub fn new(buffer: BufferT, tracking: TrackingT) -> Self {
         Scratchpad {
             buffer: UnsafeCell::new(buffer),
-            markers: RefCell::new(MarkerDeque {
+            markers: RefCell::new(MarkerStacks {
                 back: tracking.capacity(),
                 data: tracking,
                 front: 0,
