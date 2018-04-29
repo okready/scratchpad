@@ -107,12 +107,12 @@
 //! /// Maximum thread-local scratchpad allocation marker count.
 //! const THREAD_LOCAL_SCRATCHPAD_MAX_MARKERS: usize = 8;
 //!
-//! /// Buffer for thread-local scratchpad allocations. By using
+//! /// Buffer type for thread-local scratchpad allocations. By using
 //! /// `CacheAligned`, we avoid false sharing of cache lines between threads.
 //! type ThreadLocalScratchBuffer = Box<[CacheAligned]>;
 //!
-//! /// Buffer for tracking of thread-local scratchpad markers (each marker
-//! /// requires a `usize` value).
+//! /// Buffer type for tracking of thread-local scratchpad markers (each
+//! /// marker requires a `usize` value).
 //! type ThreadLocalScratchTracking = array_type_for_markers!(
 //!     CacheAligned,
 //!     THREAD_LOCAL_SCRATCHPAD_MAX_MARKERS,
@@ -2025,17 +2025,21 @@ where
     /// # Examples
     ///
     /// ```
+    /// # #[macro_use]
+    /// # extern crate scratchpad;
     /// use scratchpad::Scratchpad;
     /// use std::mem::uninitialized;
     ///
+    /// # fn main() {
     /// // Creates a scratchpad that can hold up to 256 bytes of data and up
     /// // to 4 allocation markers. The initial contents of each buffer are
     /// // ignored, so we can provide uninitialized data in order to reduce
     /// // the runtime overhead of creating a scratchpad.
-    /// let scratchpad = Scratchpad::<[u64; 32], [usize; 4]>::new(
-    ///     unsafe { uninitialized() },
-    ///     unsafe { uninitialized() },
-    /// );
+    /// let scratchpad = unsafe { Scratchpad::new(
+    ///     uninitialized::<array_type_for_bytes!(u64, 256)>(),
+    ///     uninitialized::<array_type_for_markers!(usize, 4)>(),
+    /// ) };
+    /// # }
     /// ```
     #[inline(always)]
     #[cfg(feature = "unstable")]
@@ -2055,17 +2059,21 @@ where
     /// # Examples
     ///
     /// ```
+    /// # #[macro_use]
+    /// # extern crate scratchpad;
     /// use scratchpad::Scratchpad;
     /// use std::mem::uninitialized;
     ///
+    /// # fn main() {
     /// // Creates a scratchpad that can hold up to 256 bytes of data and up
     /// // to 4 allocation markers. The initial contents of each buffer are
     /// // ignored, so we can provide uninitialized data in order to reduce
     /// // the runtime overhead of creating a scratchpad.
-    /// let scratchpad = Scratchpad::<[u64; 32], [usize; 4]>::new(
-    ///     unsafe { uninitialized() },
-    ///     unsafe { uninitialized() },
-    /// );
+    /// let scratchpad = unsafe { Scratchpad::new(
+    ///     uninitialized::<array_type_for_bytes!(u64, 256)>(),
+    ///     uninitialized::<array_type_for_markers!(usize, 4)>(),
+    /// ) };
+    /// # }
     /// ```
     #[inline(always)]
     #[cfg(not(feature = "unstable"))]
