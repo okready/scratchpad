@@ -348,8 +348,8 @@
 //! Creating a marker requires a single `usize` value (4 bytes on platforms
 //! using 32-bit pointers, 8 bytes if using 64-bit pointers) within the
 //! scratchpad's tracking buffer. When using a slice or array for marker
-//! tracking, this memory is allocated up-front, so the footprint of a
-//! [`Scratchpad`] should not change after the scratchpad is created.
+//! tracking, this memory is allocated up-front, so the footprint of the
+//! [`Scratchpad`] does not change after the scratchpad is created.
 //!
 //! Each [`Marker`] instance itself contains a reference back to its
 //! [`Scratchpad`] and its index within the scratchpad. This comes out to 8
@@ -1015,6 +1015,11 @@ where
 
 /// [`Scratchpad`] allocation marker implementation trait.
 ///
+/// This provides the shared interface for the [`MarkerFront`] and
+/// [`MarkerBack`] types.
+///
+/// [`MarkerBack`]: struct.MarkerBack.html
+/// [`MarkerFront`]: struct.MarkerFront.html
 /// [`Scratchpad`]: struct.Scratchpad.html
 pub trait Marker {
     /// Allocates space for the given value, moving it into the allocation.
