@@ -253,6 +253,10 @@
 //!
 //! - [`array_type_for_bytes!()`] and [`array_type_for_markers!()`] can be
 //!   used to declare static array types based on their capacity.
+//! - [`cache_aligned_zeroed_for_bytes!()`] and
+//!   [`cache_aligned_zeroed_for_markers!()`] provide shorthand for creating
+//!   static arrays of [`CacheAligned`] elements with their contents zeroed
+//!   out. The expansion of this macro is a constant expression.
 //! - [`uninitialized_boxed_slice_for_bytes()`] and
 //!   [`uninitialized_boxed_slice_for_markers()`] can be used to allocate
 //!   memory for a boxed slice of a given capacity without initializing its
@@ -263,6 +267,8 @@
 //! - [`array_len_for_bytes!()`] and [`array_len_for_markers!()`] return the
 //!   number of elements needed for a static array with a given capacity. The
 //!   results are constant expressions that can be evaluated at compile-time.
+//! - [`cache_aligned_zeroed!()`] provides shorthand for creating a
+//!   [`CacheAligned`] value with its contents zeroed out.
 //! - [`uninitialized_boxed_slice()`] allocates a boxed slice of a given
 //!   number of elements without initializing its contents.
 //!
@@ -389,6 +395,9 @@
 //! [`Box`]: https://doc.rust-lang.org/alloc/boxed/index.html
 //! [`Buffer`]: trait.Buffer.html
 //! [`ByteData`]: trait.ByteData.html
+//! [`cache_aligned_zeroed!()`]: macro.cache_aligned_zeroed.html
+//! [`cache_aligned_zeroed_for_bytes!()`]: macro.cache_aligned_zeroed_for_bytes.html
+//! [`cache_aligned_zeroed_for_markers!()`]: macro.cache_aligned_zeroed_for_markers.html
 //! [`CACHE_ALIGNMENT`]: constant.CACHE_ALIGNMENT.html
 //! [`CacheAligned`]: struct.CacheAligned.html
 //! [`Drop`]: https://doc.rust-lang.org/core/ops/trait.Drop.html
@@ -576,6 +585,91 @@ macro_rules! array_type_for_markers {
     };
 }
 
+/// Creates a [`CacheAligned`] instance whose contents are zeroed-out.
+///
+/// # Examples
+///
+/// ```
+/// # #[macro_use]
+/// # extern crate scratchpad;
+/// # fn main() {
+/// let zeroed = cache_aligned_zeroed!();
+/// for i in 0..zeroed.0.len() {
+///     assert_eq!(zeroed.0[i], 0);
+/// }
+/// # }
+/// ```
+#[macro_export]
+macro_rules! cache_aligned_zeroed {
+    () => {
+        $crate::CacheAligned([0; $crate::CACHE_ALIGNMENT])
+    };
+}
+
+/// Creates an array of zeroed-out [`CacheAligned`] values large enough for
+/// storage of the given byte count. The actual supported byte count may be
+/// larger due to padding.
+///
+/// # Examples
+///
+/// ```
+/// # #[macro_use]
+/// # extern crate scratchpad;
+/// # fn main() {
+/// let zeroed = cache_aligned_zeroed_for_bytes!(256);
+/// for element in &zeroed {
+///     for i in 0..element.0.len() {
+///         assert_eq!(element.0[i], 0);
+///     }
+/// }
+/// # }
+/// ```
+#[macro_export]
+macro_rules! cache_aligned_zeroed_for_bytes {
+    ($bytes:expr) => {
+        [
+            cache_aligned_zeroed!();
+            array_len_for_bytes!($crate::CacheAligned, $bytes)
+        ]
+    };
+    ($bytes:expr,) => {
+        cache_aligned_zeroed_for_bytes!($bytes)
+    };
+}
+
+/// Creates an array of zeroed-out [`CacheAligned`] values large enough for
+/// storage of at least the specified number of [allocation markers]. The
+/// actual supported marker count may be larger due to padding.
+///
+/// # Examples
+///
+/// ```
+/// # #[macro_use]
+/// # extern crate scratchpad;
+/// # fn main() {
+/// let zeroed = cache_aligned_zeroed_for_markers!(32);
+/// for element in &zeroed {
+///     for i in 0..element.0.len() {
+///         assert_eq!(element.0[i], 0);
+///     }
+/// }
+/// # }
+/// ```
+///
+/// [allocation markers]: trait.Marker.html
+#[macro_export]
+macro_rules! cache_aligned_zeroed_for_markers {
+    ($marker_count:expr) => {
+        [
+            cache_aligned_zeroed!();
+            array_len_for_markers!($crate::CacheAligned, $marker_count)
+        ]
+    };
+    ($marker_count:expr,) => {
+        cache_aligned_zeroed_for_markers!($marker_count)
+    };
+}
+
 /// Assumed cache line byte alignment.
 ///
 /// This may vary from the actual cache line alignment, which can vary between
@@ -653,6 +747,7 @@ impl std::error::Error for Error {
 /// [`CACHE_ALIGNMENT`]: constant.CACHE_ALIGNMENT.html
 /// [`Scratchpad`]: struct.Scratchpad.html
 /// [`Tracking`]: trait.Tracking.html
+#[derive(Clone, Copy)]
 #[repr(align(64))]
 pub struct CacheAligned(pub [u8; CACHE_ALIGNMENT]);
 
