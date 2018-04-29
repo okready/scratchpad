@@ -15,7 +15,9 @@ env:
 matrix:
   include:
   - rust: nightly
-    env: FEATURE_ARGS="--lib --no-default-features --features unstable"
+    env: FEATURE_ARGS="--features unstable"
+  - rust: nightly
+    env: FEATURE_ARGS="--features unstable --lib --no-default-features"
 
 script:
 - cargo test $FEATURE_ARGS --verbose
