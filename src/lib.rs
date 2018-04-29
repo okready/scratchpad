@@ -80,9 +80,7 @@
 //! - **`unstable`**: Enables unstable toolchain features (requires a nightly
 //!   compiler). Disabled by default. Enabling this feature includes:
 //!   - [`ByteData`] trait implementations for `u128`/`i128`.
-//!   - Declaration of the function [`Scratchpad::new()`] as `const`, allowing
-//!     it to be used directly to initialize static variables ([`lazy_static`]
-//!     crate or similar workaround needed otherwise).
+//!   - Declaration of the function [`Scratchpad::new()`] as `const`.
 //!   - Support for using [`Box`] as the storage type for allocations and
 //!     marker tracking, regardless of whether the `std` feature is enabled
 //!     (`alloc` library is used if `std` is disabled).
@@ -394,7 +392,6 @@
 //! [`CACHE_ALIGNMENT`]: constant.CACHE_ALIGNMENT.html
 //! [`CacheAligned`]: struct.CacheAligned.html
 //! [`Drop`]: https://doc.rust-lang.org/core/ops/trait.Drop.html
-//! [`lazy_static`]: https://crates.io/crates/lazy_static
 //! [`mark_back()`]: struct.Scratchpad.html#method.mark_back
 //! [`mark_front()`]: struct.Scratchpad.html#method.mark_front
 //! [`Marker`]: trait.Marker.html
