@@ -32,7 +32,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Fixed
 - Incorrect "deque" term use internally.
 
-## [0.1.0] - 2018-04-27
+## 0.1.0 - 2018-04-27
 ### Added
 - Initial release.
 
