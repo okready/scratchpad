@@ -8,7 +8,7 @@ documentation = "https://docs.rs/scratchpad"
 homepage = "https://github.com/okready/scratchpad"
 repository = "https://github.com/okready/scratchpad"
 readme = "README.md"
-categories = ["memory-management", "no-std"]
+categories = ["data-structures", "embedded", "memory-management", "no-std"]
 keywords = ["stack", "pool", "memory", "allocator", "no_std"]
 
 [badges]

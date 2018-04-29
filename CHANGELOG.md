@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - References to `MarkerFront` and `MarkerBack` in documentation for `Marker`.
 - Run tests with both the `std` and `unstable` crate features enabled in
   Travis CI configuration.
+- "data-structures" and "embedded" categories in `Cargo.toml` manifest.
 - Documentation link in `Cargo.toml` manifest.
 - Documentation and release nodes links in `README.md`.
 - Changelog.
