@@ -373,9 +373,11 @@
 //!   number of array sizes. Mutable slice references and boxed slices do not
 //!   have this restriction, so they can be used for unsupported array sizes.
 //! - Using large static arrays as buffers can cause the program stack to
-//!   overflow while creating a scratchpad, particularly in debug builds. It
-//!   is recommended to use either boxed slices or slice references of
-//!   externally owned arrays if stack overflow occurs.
+//!   overflow while creating a scratchpad, particularly in debug builds.
+//!   Using [`Scratchpad::static_new()`] instead of [`Scratchpad::new()`] can
+//!   help avoid such issues, and using either boxed slices or slice
+//!   references of externally owned arrays for storage can help avoid such
+//!   issues entirely.
 //!
 //! # Mutability Notes
 //!
@@ -430,7 +432,7 @@ use core::slice;
 
 use core::cell::{RefCell, UnsafeCell};
 use core::marker::PhantomData;
-use core::mem::{align_of, forget};
+use core::mem::{align_of, forget, uninitialized};
 use core::ops::{Deref, DerefMut};
 
 #[cfg(feature = "std")]
@@ -817,6 +819,22 @@ pub trait Buffer {
     fn as_bytes_mut(&mut self) -> &mut [u8];
 }
 
+/// [`Buffer`] sub-trait for static arrays.
+///
+/// This trait is used specifically to restrict the implementation of
+/// [`Scratchpad::static_new()`] to static array buffers.
+///
+/// # Safety
+///
+/// [`Scratchpad::static_new()`] leaves instances of this type **entirely**
+/// uninitialized, so implementing it is fundamentally unsafe. It should only
+/// be implemented by static arrays of [`ByteData`] types.
+///
+/// [`Buffer`]: trait.Buffer.html
+/// [`ByteData`]: trait.ByteData.html
+/// [`Scratchpad::static_new()`]: struct.Scratchpad.html#method.static_new
+pub unsafe trait StaticBuffer: Buffer {}
+
 impl<'a, T> Buffer for &'a mut [T]
 where
     T: ByteData,
@@ -895,6 +913,11 @@ macro_rules! generate_buffer_impl {
                 ) }
             }
         }
+
+        unsafe impl<T> StaticBuffer for [T; $size]
+        where
+            T: ByteData,
+        {}
     };
 
     ($size:expr, $($other:tt)*) => {
@@ -2056,7 +2079,65 @@ where
             }),
         }
     }
+}
 
+impl<BufferT, TrackingT> Scratchpad<BufferT, TrackingT>
+where
+    BufferT: StaticBuffer,
+    TrackingT: Tracking + StaticBuffer,
+{
+    /// Creates a new instance for scratchpad types backed entirely by static
+    /// arrays without initializing array memory.
+    ///
+    /// Since static array [`Buffer`] and [`Tracking`] types are owned by the
+    /// scratchpad, and their sizes are known ahead of time to the scratchpad
+    /// type, scratchpads using only static arrays for storage can be created
+    /// without having to provide any parameters.
+    ///
+    /// Note that this cannot be `const` as there is no support in Rust for
+    /// creating uninitialized values in `const` code. [`Scratchpad::new()`]
+    /// must be used with the `unstable` crate feature enabled if `const` code
+    /// is required.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use]
+    /// # extern crate scratchpad;
+    /// use scratchpad::Scratchpad;
+    ///
+    /// # fn main() {
+    /// // Creates a scratchpad that can hold up to 256 bytes of data and up
+    /// // to 4 allocation markers.
+    /// let scratchpad = Scratchpad::<
+    ///     array_type_for_bytes!(u64, 256),
+    ///     array_type_for_markers!(usize, 4),
+    /// >::static_new();
+    /// # }
+    /// ```
+    ///
+    /// [`Buffer`]: trait.Buffer.html
+    /// [`Tracking`]: trait.Tracking.html
+    /// [`Scratchpad::new()`]: #method.new
+    #[inline(always)]
+    pub fn static_new() -> Self
+    {
+        Scratchpad {
+            buffer: unsafe { uninitialized() },
+            markers: RefCell::new(MarkerStacks {
+                data: unsafe { uninitialized() },
+                front: 0,
+                back: size_of::<TrackingT>() / size_of::<usize>(),
+            }),
+        }
+    }
+}
+
+impl<BufferT, TrackingT> Scratchpad<BufferT, TrackingT>
+where
+    BufferT: Buffer,
+    TrackingT: Tracking,
+{
     /// Creates a marker at the front of the allocation buffer for subsequent
     /// allocations.
     ///
