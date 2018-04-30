@@ -26,7 +26,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-scratchpad = "0.1"
+scratchpad = "0.2"
 ```
 
 and this to your crate root:
@@ -50,7 +50,7 @@ disabled in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-scratchpad = { version = "0.1", default-features = false }
+scratchpad = { version = "0.2", default-features = false }
 ```
 
 `Box` support is still available for `no_std` builds when using a nightly
@@ -73,5 +73,5 @@ Simply add the `unstable` feature to your `Cargo.toml` dependency:
 
 ```toml
 [dependencies]
-scratchpad = { version = "0.1", features = ["unstable"] }
+scratchpad = { version = "0.2", features = ["unstable"] }
 ```
