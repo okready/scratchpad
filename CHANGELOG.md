@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+- Resolve links to `CacheAligned` for `cache_aligned_zeroed!()`,
+  `cache_aligned_zeroed_for_bytes!()`, and
+  `cache_aligned_zeroed_for_markers!()` macro documentation.
 
 ## [0.1.1] - 2018-04-29
 ### Added

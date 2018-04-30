@@ -601,6 +601,8 @@ macro_rules! array_type_for_markers {
 /// }
 /// # }
 /// ```
+///
+/// [`CacheAligned`]: struct.CacheAligned.html
 #[macro_export]
 macro_rules! cache_aligned_zeroed {
     () => {
@@ -626,6 +628,8 @@ macro_rules! cache_aligned_zeroed {
 /// }
 /// # }
 /// ```
+///
+/// [`CacheAligned`]: struct.CacheAligned.html
 #[macro_export]
 macro_rules! cache_aligned_zeroed_for_bytes {
     ($bytes:expr) => {
@@ -658,6 +662,7 @@ macro_rules! cache_aligned_zeroed_for_bytes {
 /// # }
 /// ```
 ///
+/// [`CacheAligned`]: struct.CacheAligned.html
 /// [allocation markers]: trait.Marker.html
 #[macro_export]
 macro_rules! cache_aligned_zeroed_for_markers {
