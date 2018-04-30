@@ -370,9 +370,10 @@
 //! 64-bit pointers.
 //!
 //! Individual allocations have effectively no overhead. Each [`Allocation`]
-//! instance itself only contains a reference to the allocated type, whose
-//! size can vary depending on whether the allocation is a single item or an
-//! array of items.
+//! instance itself only contains a pointer to its data, whose size can vary
+//! depending on whether a fat pointer is necessary (such as for dynamically
+//! sized arrays allocated using one of the `allocate_array*()` marker
+//! methods).
 //!
 //! # Limitations
 //!
