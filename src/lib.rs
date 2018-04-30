@@ -1386,15 +1386,17 @@ pub trait Marker {
         StrT: AsRef<str>,
     {
         let iter = strings.into_iter();
-        let size = iter.clone()
-            .fold(0usize, |sum, item| sum + item.as_ref().len());
-        let mut result = unsafe { self.allocate_array_uninitialized(size)? };
+        let size = iter.clone().fold(0usize, |sum, item| {
+            sum + item.as_ref().as_bytes().len()
+        });
+        let mut result =
+            unsafe { self.allocate_array_uninitialized::<u8>(size)? };
 
         let mut start = 0usize;
         for item in iter {
-            let string_ref = item.as_ref();
-            let end = start + string_ref.len();
-            result[start..end].copy_from_slice(string_ref[..].as_bytes());
+            let bytes = item.as_ref().as_bytes();
+            let end = start + bytes.len();
+            result[start..end].copy_from_slice(&bytes[..]);
             start = end;
         }
 
