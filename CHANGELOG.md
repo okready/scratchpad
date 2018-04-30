@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Added
 - `Marker::concat()` for concatenating a series of strings into a single
   string slice allocated from the marker on which it is called.
+- `#[inline]` attribute to most `Marker` allocation functions and the
+  `uninitialized_boxed_slice*()` utility functions.
 
 ### Changed
 - Replaced data reference in `Allocation` with a raw pointer, allowing the

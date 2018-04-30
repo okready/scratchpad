@@ -1164,6 +1164,7 @@ pub trait Marker {
     /// let x = marker.allocate(3.14159).unwrap();
     /// assert_eq!(*x, 3.14159);
     /// ```
+    #[inline]
     fn allocate<'marker, T>(
         &'marker self,
         value: T,
@@ -1190,6 +1191,7 @@ pub trait Marker {
     /// let x = marker.allocate_default::<f64>().unwrap();
     /// assert_eq!(*x, 0.0);
     /// ```
+    #[inline]
     fn allocate_default<'marker, T: Default>(
         &'marker self,
     ) -> Result<Allocation<'marker, T>, Error> {
@@ -1217,6 +1219,7 @@ pub trait Marker {
     /// *x = 3.14159;
     /// assert_eq!(*x, 3.14159);
     /// ```
+    #[inline]
     unsafe fn allocate_uninitialized<'marker, T>(
         &'marker self,
     ) -> Result<Allocation<'marker, T>, Error> {
@@ -1242,6 +1245,7 @@ pub trait Marker {
     /// let x = marker.allocate_array(3, 3.14159).unwrap();
     /// assert_eq!(*x, [3.14159, 3.14159, 3.14159]);
     /// ```
+    #[inline]
     fn allocate_array<'marker, T: Clone>(
         &'marker self,
         len: usize,
@@ -1274,6 +1278,7 @@ pub trait Marker {
     /// let x = marker.allocate_array_default::<f64>(3).unwrap();
     /// assert_eq!(*x, [0.0, 0.0, 0.0]);
     /// ```
+    #[inline]
     fn allocate_array_default<'marker, T: Default>(
         &'marker self,
         len: usize,
@@ -1308,6 +1313,7 @@ pub trait Marker {
     /// let x = marker.allocate_array_with(3, |index| index as f64).unwrap();
     /// assert_eq!(*x, [0.0, 1.0, 2.0]);
     /// ```
+    #[inline]
     fn allocate_array_with<'marker, T, F: FnMut(usize) -> T>(
         &'marker self,
         len: usize,
@@ -1351,6 +1357,7 @@ pub trait Marker {
     /// x[2] = 5.14159;
     /// assert_eq!(*x, [3.14159, 4.14159, 5.14159]);
     /// ```
+    #[inline]
     unsafe fn allocate_array_uninitialized<'marker, T>(
         &'marker self,
         len: usize,
@@ -2393,6 +2400,7 @@ where
 ///
 /// [undefined behavior]: https://doc.rust-lang.org/reference/behavior-considered-undefined.html
 #[cfg(any(feature = "std", feature = "unstable"))]
+#[inline]
 pub unsafe fn uninitialized_boxed_slice<T>(len: usize) -> Box<[T]>
 where
     T: ByteData,
@@ -2422,6 +2430,7 @@ where
 ///
 /// [undefined behavior]: https://doc.rust-lang.org/reference/behavior-considered-undefined.html
 #[cfg(any(feature = "std", feature = "unstable"))]
+#[inline]
 pub unsafe fn uninitialized_boxed_slice_for_bytes<T>(bytes: usize) -> Box<[T]>
 where
     T: ByteData,
@@ -2452,6 +2461,7 @@ where
 /// [allocation markers]: trait.Marker.html
 /// [undefined behavior]: https://doc.rust-lang.org/reference/behavior-considered-undefined.html
 #[cfg(any(feature = "std", feature = "unstable"))]
+#[inline]
 pub unsafe fn uninitialized_boxed_slice_for_markers<T>(
     marker_count: usize,
 ) -> Box<[T]>
