@@ -13,6 +13,7 @@
 //! - [Overview](#overview)
 //! - [Crate Features](#crate-features)
 //! - [Examples](#examples)
+//! - [String Concatenation](#string-concatenation)
 //! - [Memory Management](#memory-management)
 //!   - [Buffer Types](#buffer-types)
 //!   - [Macros and Functions for Handling Buffers](#macros-and-functions-for-handling-buffers)
@@ -219,6 +220,14 @@
 //! }
 //! ```
 //!
+//! # String Concatenation
+//!
+//! A useful secondary feature of the crate is the ability to easily
+//! concatenate an arbitrary number of strings without requiring heap memory.
+//! Concatenation is performed using the [`Marker::concat()`] method, which
+//! takes a collection of strings and, if enough space is available, returns
+//! an allocation containing a [`str`] slice with the concatenated result.
+//!
 //! # Memory Management
 //!
 //! ## Buffer Types
@@ -406,9 +415,11 @@
 //! [`mark_back()`]: struct.Scratchpad.html#method.mark_back
 //! [`mark_front()`]: struct.Scratchpad.html#method.mark_front
 //! [`Marker`]: trait.Marker.html
+//! [`Marker::concat()`]: trait.Marker.html#method.concat
 //! [`Scratchpad`]: struct.Scratchpad.html
 //! [`Scratchpad::new()`]: struct.Scratchpad.html#method.new
 //! [`Scratchpad::static_new()`]: struct.Scratchpad.html#method.static_new
+//! [`str`]: https://doc.rust-lang.org/std/primitive.str.html
 //! [`Tracking`]: trait.Tracking.html
 //! [`uninitialized_boxed_slice()`]: fn.uninitialized_boxed_slice.html
 //! [`uninitialized_boxed_slice_for_bytes()`]: fn.uninitialized_boxed_slice_for_bytes.html
@@ -433,7 +444,7 @@ use core::slice;
 
 use core::cell::{RefCell, UnsafeCell};
 use core::marker::PhantomData;
-use core::mem::{align_of, forget, uninitialized};
+use core::mem::{align_of, forget, transmute, uninitialized};
 use core::ops::{Deref, DerefMut};
 
 #[cfg(feature = "std")]
@@ -1351,6 +1362,45 @@ pub trait Marker {
         })
     }
 
+    /// Combines each of the provided strings into a single string slice
+    /// allocated from this marker.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::Scratchpad;
+    ///
+    /// let scratchpad = Scratchpad::<[u8; 16], [usize; 1]>::static_new();
+    /// let marker = scratchpad.mark_front().unwrap();
+    ///
+    /// let combined = marker.concat(&["Hello,", " world", "!"]).unwrap();
+    /// assert_eq!(&*combined, "Hello, world!");
+    /// ```
+    fn concat<'marker, IntoIteratorT, IteratorT, StrT>(
+        &'marker self,
+        strings: IntoIteratorT,
+    ) -> Result<Allocation<'marker, 'static, str>, Error>
+    where
+        IntoIteratorT: IntoIterator<Item = StrT, IntoIter = IteratorT>,
+        IteratorT: Iterator<Item = StrT> + Clone,
+        StrT: AsRef<str>,
+    {
+        let iter = strings.into_iter();
+        let size = iter.clone()
+            .fold(0usize, |sum, item| sum + item.as_ref().len());
+        let mut result = unsafe { self.allocate_array_uninitialized(size)? };
+
+        let mut start = 0usize;
+        for item in iter {
+            let string_ref = item.as_ref();
+            let end = start + string_ref.len();
+            result[start..end].copy_from_slice(string_ref[..].as_bytes());
+            start = end;
+        }
+
+        unsafe { Ok(transmute(result)) }
+    }
+
     /// Allocates a block of memory of a given size and alignment.
     ///
     /// If successful, returns a tuple containing the allocation address and
@@ -1634,6 +1684,33 @@ where
         len: usize,
     ) -> Result<Allocation<'marker, 't, [T]>, Error> {
         Marker::allocate_array_uninitialized(self, len)
+    }
+
+    /// Combines each of the provided strings into a single string slice
+    /// allocated from this marker.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::Scratchpad;
+    ///
+    /// let scratchpad = Scratchpad::<[u8; 16], [usize; 1]>::static_new();
+    /// let marker = scratchpad.mark_front().unwrap();
+    ///
+    /// let combined = marker.concat(&["Hello,", " world", "!"]).unwrap();
+    /// assert_eq!(&*combined, "Hello, world!");
+    /// ```
+    #[inline(always)]
+    pub fn concat<'marker, IntoIteratorT, IteratorT, StrT>(
+        &'marker self,
+        strings: IntoIteratorT,
+    ) -> Result<Allocation<'marker, 'static, str>, Error>
+    where
+        IntoIteratorT: IntoIterator<Item = StrT, IntoIter = IteratorT>,
+        IteratorT: Iterator<Item = StrT> + Clone,
+        StrT: AsRef<str>,
+    {
+        Marker::concat(self, strings)
     }
 }
 
@@ -1939,6 +2016,33 @@ where
         len: usize,
     ) -> Result<Allocation<'marker, 't, [T]>, Error> {
         Marker::allocate_array_uninitialized(self, len)
+    }
+
+    /// Combines each of the provided strings into a single string slice
+    /// allocated from this marker.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::Scratchpad;
+    ///
+    /// let scratchpad = Scratchpad::<[u8; 16], [usize; 1]>::static_new();
+    /// let marker = scratchpad.mark_back().unwrap();
+    ///
+    /// let combined = marker.concat(&["Hello,", " world", "!"]).unwrap();
+    /// assert_eq!(&*combined, "Hello, world!");
+    /// ```
+    #[inline(always)]
+    pub fn concat<'marker, IntoIteratorT, IteratorT, StrT>(
+        &'marker self,
+        strings: IntoIteratorT,
+    ) -> Result<Allocation<'marker, 'static, str>, Error>
+    where
+        IntoIteratorT: IntoIterator<Item = StrT, IntoIter = IteratorT>,
+        IteratorT: Iterator<Item = StrT> + Clone,
+        StrT: AsRef<str>,
+    {
+        Marker::concat(self, strings)
     }
 }
 

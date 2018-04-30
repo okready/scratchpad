@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- `Marker::concat()` for concatenating a series of strings into a single
+  string slice allocated from the marker on which it is called.
+
 ### Removed
 - Reference to creating static instances of `Scratchpad` from README
   (overlooked when correcting the crate documentation for version 0.2.0).
