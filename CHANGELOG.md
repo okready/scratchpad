@@ -6,9 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 ### Fixed
-- Resolve links to `CacheAligned` for `cache_aligned_zeroed!()`,
-  `cache_aligned_zeroed_for_bytes!()`, and
-  `cache_aligned_zeroed_for_markers!()` macro documentation.
+- Resolve link to `Scratchpad::static_new()` in crate documentation.
+- Resolve links to `CacheAligned` in documentation for
+  `cache_aligned_zeroed!()`, `cache_aligned_zeroed_for_bytes!()`, and
+  `cache_aligned_zeroed_for_markers!()` macros.
 
 ## [0.1.1] - 2018-04-29
 ### Added

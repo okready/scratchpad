@@ -408,6 +408,7 @@
 //! [`Marker`]: trait.Marker.html
 //! [`Scratchpad`]: struct.Scratchpad.html
 //! [`Scratchpad::new()`]: struct.Scratchpad.html#method.new
+//! [`Scratchpad::static_new()`]: struct.Scratchpad.html#method.static_new
 //! [`Tracking`]: trait.Tracking.html
 //! [`uninitialized_boxed_slice()`]: fn.uninitialized_boxed_slice.html
 //! [`uninitialized_boxed_slice_for_bytes()`]: fn.uninitialized_boxed_slice_for_bytes.html
