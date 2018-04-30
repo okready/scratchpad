@@ -1133,11 +1133,11 @@ where
 
 impl<'marker, T> fmt::Debug for Allocation<'marker, T>
 where
-    T: ?Sized,
+    T: ?Sized + fmt::Debug,
 {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Allocation {{ data: {:?} }}", self.data)
+        unsafe { write!(f, "Allocation {{ data: {:?} }}", &*self.data) }
     }
 }
 
