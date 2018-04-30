@@ -14,6 +14,12 @@ env:
 
 matrix:
   include:
+  # `rustfmt` verification.
+  - rust: nightly
+    before_script:
+    - rustup component add rustfmt-preview
+    script:
+    - cargo fmt -- --write-mode=check
   - rust: nightly
     env: FEATURE_ARGS="--features unstable"
   - rust: nightly
