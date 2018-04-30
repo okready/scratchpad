@@ -62,9 +62,7 @@ The `unstable` crate feature provides some additional functionality when using
 a nightly toolchain:
 
 - `ByteData` trait implementations for `u128`/`i128`.
-- Declaration of the function `Scratchpad::new()` as `const`, allowing it to
-  be used directly to initialize static variables (`lazy_static` crate or
-  similar workaround needed otherwise).
+- Declaration of the function `Scratchpad::new()` as `const`.
 - Support for using `Box` as the storage type for allocations and marker
   tracking, regardless of whether the `std` feature is enabled (`alloc`
   library is used if `std` is disabled).
