@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   string slice allocated from the marker on which it is called.
 
 ### Removed
+- Unnecessary `'t` lifetime parameter from `Allocation` and all allocation
+  methods.
 - Reference to creating static instances of `Scratchpad` from README
   (overlooked when correcting the crate documentation for version 0.2.0).
 

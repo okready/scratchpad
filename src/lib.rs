@@ -1049,20 +1049,20 @@ where
 /// [`Marker`]: trait.Marker.html
 /// [`Deref`]: https://doc.rust-lang.org/core/ops/trait.Deref.html
 /// [`DerefMut`]: https://doc.rust-lang.org/core/ops/trait.DerefMut.html
-pub struct Allocation<'marker, 't, T>
+pub struct Allocation<'marker, T>
 where
-    T: 't + ?Sized,
+    T: ?Sized,
 {
     /// Allocation data.
-    data: &'t mut T,
+    data: *mut T,
     /// Dummy reference for ensuring the allocation does not outlive the
     /// `Marker` from which it was allocated.
     _phantom: PhantomData<&'marker ()>,
 }
 
-impl<'marker, 't, T> Allocation<'marker, 't, T>
+impl<'marker, T> Allocation<'marker, T>
 where
-    T: 't + Sized,
+    T: Sized,
 {
     /// Moves the value out of the `Allocation`.
     ///
@@ -1099,31 +1099,31 @@ where
     }
 }
 
-impl<'marker, 't, T> Deref for Allocation<'marker, 't, T>
+impl<'marker, T> Deref for Allocation<'marker, T>
 where
-    T: 't + ?Sized,
+    T: ?Sized,
 {
     type Target = T;
 
     #[inline]
     fn deref(&self) -> &T {
-        self.data
+        unsafe { &*self.data }
     }
 }
 
-impl<'marker, 't, T> DerefMut for Allocation<'marker, 't, T>
+impl<'marker, T> DerefMut for Allocation<'marker, T>
 where
-    T: 't + ?Sized,
+    T: ?Sized,
 {
     #[inline]
     fn deref_mut(&mut self) -> &mut T {
-        self.data
+        unsafe { &mut *self.data }
     }
 }
 
-impl<'marker, 't, T> Drop for Allocation<'marker, 't, T>
+impl<'marker, T> Drop for Allocation<'marker, T>
 where
-    T: 't + ?Sized,
+    T: ?Sized,
 {
     #[inline]
     fn drop(&mut self) {
@@ -1131,9 +1131,9 @@ where
     }
 }
 
-impl<'marker, 't, T> fmt::Debug for Allocation<'marker, 't, T>
+impl<'marker, T> fmt::Debug for Allocation<'marker, T>
 where
-    T: 't + ?Sized + fmt::Debug,
+    T: ?Sized,
 {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -1163,10 +1163,10 @@ pub trait Marker {
     /// let x = marker.allocate(3.14159).unwrap();
     /// assert_eq!(*x, 3.14159);
     /// ```
-    fn allocate<'marker, 't, T>(
+    fn allocate<'marker, T>(
         &'marker self,
         value: T,
-    ) -> Result<Allocation<'marker, 't, T>, Error> {
+    ) -> Result<Allocation<'marker, T>, Error> {
         unsafe {
             self.allocate_uninitialized::<T>()
                 .map(|allocation| {
@@ -1189,9 +1189,9 @@ pub trait Marker {
     /// let x = marker.allocate_default::<f64>().unwrap();
     /// assert_eq!(*x, 0.0);
     /// ```
-    fn allocate_default<'marker, 't, T: Default>(
+    fn allocate_default<'marker, T: Default>(
         &'marker self,
-    ) -> Result<Allocation<'marker, 't, T>, Error> {
+    ) -> Result<Allocation<'marker, T>, Error> {
         self.allocate(Default::default())
     }
 
@@ -1216,13 +1216,13 @@ pub trait Marker {
     /// *x = 3.14159;
     /// assert_eq!(*x, 3.14159);
     /// ```
-    unsafe fn allocate_uninitialized<'marker, 't, T>(
+    unsafe fn allocate_uninitialized<'marker, T>(
         &'marker self,
-    ) -> Result<Allocation<'marker, 't, T>, Error> {
+    ) -> Result<Allocation<'marker, T>, Error> {
         let data = self.allocate_memory(align_of::<T>(), size_of::<T>(), 1)?;
 
         Ok(Allocation {
-            data: &mut *(data as *mut T),
+            data: data as *mut T,
             _phantom: PhantomData,
         })
     }
@@ -1241,16 +1241,17 @@ pub trait Marker {
     /// let x = marker.allocate_array(3, 3.14159).unwrap();
     /// assert_eq!(*x, [3.14159, 3.14159, 3.14159]);
     /// ```
-    fn allocate_array<'marker, 't, T: Clone>(
+    fn allocate_array<'marker, T: Clone>(
         &'marker self,
         len: usize,
         value: T,
-    ) -> Result<Allocation<'marker, 't, [T]>, Error> {
+    ) -> Result<Allocation<'marker, [T]>, Error> {
         unsafe {
             self.allocate_array_uninitialized(len)
                 .map(|allocation| {
-                    debug_assert_eq!(allocation.data.len(), len);
-                    for element in allocation.data.iter_mut() {
+                    let data = &mut *allocation.data;
+                    debug_assert_eq!(data.len(), len);
+                    for element in data.iter_mut() {
                         ptr::write(element, value.clone());
                     }
                     allocation
@@ -1272,15 +1273,16 @@ pub trait Marker {
     /// let x = marker.allocate_array_default::<f64>(3).unwrap();
     /// assert_eq!(*x, [0.0, 0.0, 0.0]);
     /// ```
-    fn allocate_array_default<'marker, 't, T: Default>(
+    fn allocate_array_default<'marker, T: Default>(
         &'marker self,
         len: usize,
-    ) -> Result<Allocation<'marker, 't, [T]>, Error> {
+    ) -> Result<Allocation<'marker, [T]>, Error> {
         unsafe {
             self.allocate_array_uninitialized(len)
                 .map(|allocation| {
-                    debug_assert_eq!(allocation.data.len(), len);
-                    for element in allocation.data.iter_mut() {
+                    let data = &mut *allocation.data;
+                    debug_assert_eq!(data.len(), len);
+                    for element in data.iter_mut() {
                         ptr::write(element, Default::default());
                     }
                     allocation
@@ -1305,18 +1307,17 @@ pub trait Marker {
     /// let x = marker.allocate_array_with(3, |index| index as f64).unwrap();
     /// assert_eq!(*x, [0.0, 1.0, 2.0]);
     /// ```
-    fn allocate_array_with<'marker, 't, T, F: FnMut(usize) -> T>(
+    fn allocate_array_with<'marker, T, F: FnMut(usize) -> T>(
         &'marker self,
         len: usize,
         mut func: F,
-    ) -> Result<Allocation<'marker, 't, [T]>, Error> {
+    ) -> Result<Allocation<'marker, [T]>, Error> {
         unsafe {
             self.allocate_array_uninitialized(len)
                 .map(|allocation| {
-                    debug_assert_eq!(allocation.data.len(), len);
-                    for (index, element) in
-                        allocation.data.iter_mut().enumerate()
-                    {
+                    let data = &mut *allocation.data;
+                    debug_assert_eq!(data.len(), len);
+                    for (index, element) in data.iter_mut().enumerate() {
                         ptr::write(element, func(index));
                     }
                     allocation
@@ -1349,10 +1350,10 @@ pub trait Marker {
     /// x[2] = 5.14159;
     /// assert_eq!(*x, [3.14159, 4.14159, 5.14159]);
     /// ```
-    unsafe fn allocate_array_uninitialized<'marker, 't, T>(
+    unsafe fn allocate_array_uninitialized<'marker, T>(
         &'marker self,
         len: usize,
-    ) -> Result<Allocation<'marker, 't, [T]>, Error> {
+    ) -> Result<Allocation<'marker, [T]>, Error> {
         let data =
             self.allocate_memory(align_of::<T>(), size_of::<T>(), len)?;
 
@@ -1379,7 +1380,7 @@ pub trait Marker {
     fn concat<'marker, IntoIteratorT, IteratorT, StrT>(
         &'marker self,
         strings: IntoIteratorT,
-    ) -> Result<Allocation<'marker, 'static, str>, Error>
+    ) -> Result<Allocation<'marker, str>, Error>
     where
         IntoIteratorT: IntoIterator<Item = StrT, IntoIter = IteratorT>,
         IteratorT: Iterator<Item = StrT> + Clone,
@@ -1529,10 +1530,10 @@ where
     /// assert_eq!(*x, 3.14159);
     /// ```
     #[inline(always)]
-    pub fn allocate<'marker, 't, T>(
+    pub fn allocate<'marker, T>(
         &'marker self,
         value: T,
-    ) -> Result<Allocation<'marker, 't, T>, Error> {
+    ) -> Result<Allocation<'marker, T>, Error> {
         Marker::allocate(self, value)
     }
 
@@ -1550,9 +1551,9 @@ where
     /// assert_eq!(*x, 0.0);
     /// ```
     #[inline(always)]
-    pub fn allocate_default<'marker, 't, T: Default>(
+    pub fn allocate_default<'marker, T: Default>(
         &'marker self,
-    ) -> Result<Allocation<'marker, 't, T>, Error> {
+    ) -> Result<Allocation<'marker, T>, Error> {
         Marker::allocate_default(self)
     }
 
@@ -1578,9 +1579,9 @@ where
     /// assert_eq!(*x, 3.14159);
     /// ```
     #[inline(always)]
-    pub unsafe fn allocate_uninitialized<'marker, 't, T>(
+    pub unsafe fn allocate_uninitialized<'marker, T>(
         &'marker self,
-    ) -> Result<Allocation<'marker, 't, T>, Error> {
+    ) -> Result<Allocation<'marker, T>, Error> {
         Marker::allocate_uninitialized(self)
     }
 
@@ -1599,11 +1600,11 @@ where
     /// assert_eq!(*x, [3.14159, 3.14159, 3.14159]);
     /// ```
     #[inline(always)]
-    pub fn allocate_array<'marker, 't, T: Clone>(
+    pub fn allocate_array<'marker, T: Clone>(
         &'marker self,
         len: usize,
         value: T,
-    ) -> Result<Allocation<'marker, 't, [T]>, Error> {
+    ) -> Result<Allocation<'marker, [T]>, Error> {
         Marker::allocate_array(self, len, value)
     }
 
@@ -1622,10 +1623,10 @@ where
     /// assert_eq!(*x, [0.0, 0.0, 0.0]);
     /// ```
     #[inline(always)]
-    pub fn allocate_array_default<'marker, 't, T: Default>(
+    pub fn allocate_array_default<'marker, T: Default>(
         &'marker self,
         len: usize,
-    ) -> Result<Allocation<'marker, 't, [T]>, Error> {
+    ) -> Result<Allocation<'marker, [T]>, Error> {
         Marker::allocate_array_default(self, len)
     }
 
@@ -1647,11 +1648,11 @@ where
     /// assert_eq!(*x, [0.0, 1.0, 2.0]);
     /// ```
     #[inline(always)]
-    pub fn allocate_array_with<'marker, 't, T, F: FnMut(usize) -> T>(
+    pub fn allocate_array_with<'marker, T, F: FnMut(usize) -> T>(
         &'marker self,
         len: usize,
         func: F,
-    ) -> Result<Allocation<'marker, 't, [T]>, Error> {
+    ) -> Result<Allocation<'marker, [T]>, Error> {
         Marker::allocate_array_with(self, len, func)
     }
 
@@ -1681,10 +1682,10 @@ where
     /// assert_eq!(*x, [3.14159, 4.14159, 5.14159]);
     /// ```
     #[inline(always)]
-    pub unsafe fn allocate_array_uninitialized<'marker, 't, T>(
+    pub unsafe fn allocate_array_uninitialized<'marker, T>(
         &'marker self,
         len: usize,
-    ) -> Result<Allocation<'marker, 't, [T]>, Error> {
+    ) -> Result<Allocation<'marker, [T]>, Error> {
         Marker::allocate_array_uninitialized(self, len)
     }
 
@@ -1706,7 +1707,7 @@ where
     pub fn concat<'marker, IntoIteratorT, IteratorT, StrT>(
         &'marker self,
         strings: IntoIteratorT,
-    ) -> Result<Allocation<'marker, 'static, str>, Error>
+    ) -> Result<Allocation<'marker, str>, Error>
     where
         IntoIteratorT: IntoIterator<Item = StrT, IntoIter = IteratorT>,
         IteratorT: Iterator<Item = StrT> + Clone,
@@ -1861,10 +1862,10 @@ where
     /// assert_eq!(*x, 3.14159);
     /// ```
     #[inline(always)]
-    pub fn allocate<'marker, 't, T>(
+    pub fn allocate<'marker, T>(
         &'marker self,
         value: T,
-    ) -> Result<Allocation<'marker, 't, T>, Error> {
+    ) -> Result<Allocation<'marker, T>, Error> {
         Marker::allocate(self, value)
     }
 
@@ -1882,9 +1883,9 @@ where
     /// assert_eq!(*x, 0.0);
     /// ```
     #[inline(always)]
-    pub fn allocate_default<'marker, 't, T: Default>(
+    pub fn allocate_default<'marker, T: Default>(
         &'marker self,
-    ) -> Result<Allocation<'marker, 't, T>, Error> {
+    ) -> Result<Allocation<'marker, T>, Error> {
         Marker::allocate_default(self)
     }
 
@@ -1910,9 +1911,9 @@ where
     /// assert_eq!(*x, 3.14159);
     /// ```
     #[inline(always)]
-    pub unsafe fn allocate_uninitialized<'marker, 't, T>(
+    pub unsafe fn allocate_uninitialized<'marker, T>(
         &'marker self,
-    ) -> Result<Allocation<'marker, 't, T>, Error> {
+    ) -> Result<Allocation<'marker, T>, Error> {
         Marker::allocate_uninitialized(self)
     }
 
@@ -1931,11 +1932,11 @@ where
     /// assert_eq!(*x, [3.14159, 3.14159, 3.14159]);
     /// ```
     #[inline(always)]
-    pub fn allocate_array<'marker, 't, T: Clone>(
+    pub fn allocate_array<'marker, T: Clone>(
         &'marker self,
         len: usize,
         value: T,
-    ) -> Result<Allocation<'marker, 't, [T]>, Error> {
+    ) -> Result<Allocation<'marker, [T]>, Error> {
         Marker::allocate_array(self, len, value)
     }
 
@@ -1954,10 +1955,10 @@ where
     /// assert_eq!(*x, [0.0, 0.0, 0.0]);
     /// ```
     #[inline(always)]
-    pub fn allocate_array_default<'marker, 't, T: Default>(
+    pub fn allocate_array_default<'marker, T: Default>(
         &'marker self,
         len: usize,
-    ) -> Result<Allocation<'marker, 't, [T]>, Error> {
+    ) -> Result<Allocation<'marker, [T]>, Error> {
         Marker::allocate_array_default(self, len)
     }
 
@@ -1979,11 +1980,11 @@ where
     /// assert_eq!(*x, [0.0, 1.0, 2.0]);
     /// ```
     #[inline(always)]
-    pub fn allocate_array_with<'marker, 't, T, F: FnMut(usize) -> T>(
+    pub fn allocate_array_with<'marker, T, F: FnMut(usize) -> T>(
         &'marker self,
         len: usize,
         func: F,
-    ) -> Result<Allocation<'marker, 't, [T]>, Error> {
+    ) -> Result<Allocation<'marker, [T]>, Error> {
         Marker::allocate_array_with(self, len, func)
     }
 
@@ -2013,10 +2014,10 @@ where
     /// assert_eq!(*x, [3.14159, 4.14159, 5.14159]);
     /// ```
     #[inline(always)]
-    pub unsafe fn allocate_array_uninitialized<'marker, 't, T>(
+    pub unsafe fn allocate_array_uninitialized<'marker, T>(
         &'marker self,
         len: usize,
-    ) -> Result<Allocation<'marker, 't, [T]>, Error> {
+    ) -> Result<Allocation<'marker, [T]>, Error> {
         Marker::allocate_array_uninitialized(self, len)
     }
 
@@ -2038,7 +2039,7 @@ where
     pub fn concat<'marker, IntoIteratorT, IteratorT, StrT>(
         &'marker self,
         strings: IntoIteratorT,
-    ) -> Result<Allocation<'marker, 'static, str>, Error>
+    ) -> Result<Allocation<'marker, str>, Error>
     where
         IntoIteratorT: IntoIterator<Item = StrT, IntoIter = IteratorT>,
         IteratorT: Iterator<Item = StrT> + Clone,
