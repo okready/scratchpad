@@ -634,10 +634,8 @@ macro_rules! cache_aligned_zeroed {
 #[macro_export]
 macro_rules! cache_aligned_zeroed_for_bytes {
     ($bytes:expr) => {
-        [
-            cache_aligned_zeroed!();
-            array_len_for_bytes!($crate::CacheAligned, $bytes)
-        ]
+        [cache_aligned_zeroed!();
+            array_len_for_bytes!($crate::CacheAligned, $bytes)]
     };
     ($bytes:expr,) => {
         cache_aligned_zeroed_for_bytes!($bytes)
@@ -668,10 +666,8 @@ macro_rules! cache_aligned_zeroed_for_bytes {
 #[macro_export]
 macro_rules! cache_aligned_zeroed_for_markers {
     ($marker_count:expr) => {
-        [
-            cache_aligned_zeroed!();
-            array_len_for_markers!($crate::CacheAligned, $marker_count)
-        ]
+        [cache_aligned_zeroed!();
+            array_len_for_markers!($crate::CacheAligned, $marker_count)]
     };
     ($marker_count:expr,) => {
         cache_aligned_zeroed_for_markers!($marker_count)
@@ -1161,10 +1157,11 @@ pub trait Marker {
         value: T,
     ) -> Result<Allocation<'marker, 't, T>, Error> {
         unsafe {
-            self.allocate_uninitialized::<T>().map(|allocation| {
-                ptr::write(allocation.data, value);
-                allocation
-            })
+            self.allocate_uninitialized::<T>()
+                .map(|allocation| {
+                    ptr::write(allocation.data, value);
+                    allocation
+                })
         }
     }
 
@@ -1239,13 +1236,14 @@ pub trait Marker {
         value: T,
     ) -> Result<Allocation<'marker, 't, [T]>, Error> {
         unsafe {
-            self.allocate_array_uninitialized(len).map(|allocation| {
-                debug_assert_eq!(allocation.data.len(), len);
-                for element in allocation.data.iter_mut() {
-                    ptr::write(element, value.clone());
-                }
-                allocation
-            })
+            self.allocate_array_uninitialized(len)
+                .map(|allocation| {
+                    debug_assert_eq!(allocation.data.len(), len);
+                    for element in allocation.data.iter_mut() {
+                        ptr::write(element, value.clone());
+                    }
+                    allocation
+                })
         }
     }
 
@@ -1268,13 +1266,14 @@ pub trait Marker {
         len: usize,
     ) -> Result<Allocation<'marker, 't, [T]>, Error> {
         unsafe {
-            self.allocate_array_uninitialized(len).map(|allocation| {
-                debug_assert_eq!(allocation.data.len(), len);
-                for element in allocation.data.iter_mut() {
-                    ptr::write(element, Default::default());
-                }
-                allocation
-            })
+            self.allocate_array_uninitialized(len)
+                .map(|allocation| {
+                    debug_assert_eq!(allocation.data.len(), len);
+                    for element in allocation.data.iter_mut() {
+                        ptr::write(element, Default::default());
+                    }
+                    allocation
+                })
         }
     }
 
@@ -1301,14 +1300,16 @@ pub trait Marker {
         mut func: F,
     ) -> Result<Allocation<'marker, 't, [T]>, Error> {
         unsafe {
-            self.allocate_array_uninitialized(len).map(|allocation| {
-                debug_assert_eq!(allocation.data.len(), len);
-                for (index, element) in allocation.data.iter_mut().enumerate()
-                {
-                    ptr::write(element, func(index));
-                }
-                allocation
-            })
+            self.allocate_array_uninitialized(len)
+                .map(|allocation| {
+                    debug_assert_eq!(allocation.data.len(), len);
+                    for (index, element) in
+                        allocation.data.iter_mut().enumerate()
+                    {
+                        ptr::write(element, func(index));
+                    }
+                    allocation
+                })
         }
     }
 
@@ -1422,8 +1423,8 @@ where
         debug_assert_eq!(alignment & alignment_mask, 0);
 
         // Pad the allocation size to match the requested alignment.
-        let size = size.checked_add(alignment_mask).ok_or(Error::Overflow)?
-            & !alignment_mask;
+        let size = size.checked_add(alignment_mask)
+            .ok_or(Error::Overflow)? & !alignment_mask;
         let size = size * len;
 
         // Compute the buffer range needed to accommodate the allocation size
@@ -1441,8 +1442,9 @@ where
         let start = buffer_start + markers.data.get(self.index);
         debug_assert!(start <= buffer_end);
 
-        let start = start.checked_add(alignment_mask).ok_or(Error::Overflow)?
-            & !alignment_mask;
+        let start = start
+            .checked_add(alignment_mask)
+            .ok_or(Error::Overflow)? & !alignment_mask;
         let end = start.checked_add(size).ok_or(Error::Overflow)?;
         if end > buffer_end {
             return Err(Error::InsufficientMemory);
@@ -1726,8 +1728,8 @@ where
         debug_assert_eq!(alignment & alignment_mask, 0);
 
         // Pad the allocation size to match the requested alignment.
-        let size = size.checked_add(alignment_mask).ok_or(Error::Overflow)?
-            & !alignment_mask;
+        let size = size.checked_add(alignment_mask)
+            .ok_or(Error::Overflow)? & !alignment_mask;
         let size = size * len;
 
         // Compute the buffer range needed to accommodate the allocation size
@@ -1744,14 +1746,17 @@ where
 
         debug_assert!(start_min <= buffer_end);
 
-        let start = buffer_end.checked_sub(size).ok_or(Error::Overflow)?
-            & !alignment_mask;
+        let start = buffer_end
+            .checked_sub(size)
+            .ok_or(Error::Overflow)? & !alignment_mask;
         if start < start_min {
             return Err(Error::InsufficientMemory);
         }
 
         // Update this marker's offset and return the allocation.
-        markers.data.set(self.index, start - buffer_start);
+        markers
+            .data
+            .set(self.index, start - buffer_start);
 
         Ok(start as *mut u8)
     }
@@ -2134,8 +2139,7 @@ where
     /// [`Tracking`]: trait.Tracking.html
     /// [`Scratchpad::new()`]: #method.new
     #[inline(always)]
-    pub fn static_new() -> Self
-    {
+    pub fn static_new() -> Self {
         Scratchpad {
             buffer: unsafe { uninitialized() },
             markers: RefCell::new(MarkerStacks {

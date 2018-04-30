@@ -6,9 +6,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use super::*;
 use arrayvec::ArrayVec;
 use core::mem::uninitialized;
-use super::*;
 
 // Trait for accessing the internals of `Marker` structs.
 trait MarkerInternal: Marker {
@@ -107,8 +107,12 @@ fn validate_basic_operations<'scratchpad, MF, CF, M>(
     conv: CF,
 ) where
     MF: Fn(&'scratchpad SimpleScratchpad) -> Result<M, Error>,
-    CF: for<'a> Fn(&'a [usize])
-        -> (ArrayVec<SimpleTracking>, ArrayVec<SimpleTracking>),
+    CF: for<'a> Fn(
+        &'a [usize]
+    ) -> (
+        ArrayVec<SimpleTracking>,
+        ArrayVec<SimpleTracking>,
+    ),
     M: MarkerInternal + fmt::Debug,
 {
     // Rust should guarantee a default alignment of at least 8 bytes (for
@@ -116,7 +120,10 @@ fn validate_basic_operations<'scratchpad, MF, CF, M>(
     // such.
     assert_eq!(*scratchpad.markers.borrow(), conv(&[][..]));
     unsafe {
-        assert_eq!((*scratchpad.buffer.get()).as_ptr() as usize & 0x7, 0);
+        assert_eq!(
+            (*scratchpad.buffer.get()).as_ptr() as usize & 0x7,
+            0,
+        );
     }
 
     // Set an initial marker, `a`, for allocations.
@@ -158,7 +165,10 @@ fn validate_basic_operations<'scratchpad, MF, CF, M>(
 
     // Attempt another allocation from marker `a`, which should fail since a
     // more recently created marker, `b`, is still active.
-    assert_eq!(a.allocate(3u8).unwrap_err(), Error::MarkerLocked);
+    assert_eq!(
+        a.allocate(3u8).unwrap_err(),
+        Error::MarkerLocked,
+    );
 
     {
         // Allocate an 8-bit integer and 16-bit integer from marker `b`. The
@@ -197,7 +207,10 @@ fn validate_basic_operations<'scratchpad, MF, CF, M>(
     {
         // Allocate an array of 12 bytes from `c`.
         let c0 = c.allocate_array(12, 17u8).unwrap();
-        assert_eq!(*c0, [17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17]);
+        assert_eq!(
+            *c0,
+            [17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17],
+        );
         assert_eq!(
             *scratchpad.markers.borrow(),
             conv(&[12 + a_padding, 16 + a_padding, 28 + a_padding][..]),
@@ -215,14 +228,17 @@ fn validate_basic_operations<'scratchpad, MF, CF, M>(
                 12 + a_padding,
                 16 + a_padding,
                 28 + a_padding,
-                28 + a_padding
-            ][..]
+                28 + a_padding,
+            ][..],
         ),
     );
 
     // Attempt to set another marker, which should fail due to reaching
     // our marker limit.
-    assert_eq!(mark(scratchpad).unwrap_err(), Error::MarkerLimit);
+    assert_eq!(
+        mark(scratchpad).unwrap_err(),
+        Error::MarkerLimit,
+    );
 
     // Release marker `a` and re-attempt creation of a new marker. This should
     // still fail since the reservation for marker `a` cannot be reclaimed
@@ -235,11 +251,14 @@ fn validate_basic_operations<'scratchpad, MF, CF, M>(
                 core::usize::MAX,
                 16 + a_padding,
                 28 + a_padding,
-                28 + a_padding
-            ][..]
+                28 + a_padding,
+            ][..],
         ),
     );
-    assert_eq!(mark(scratchpad).unwrap_err(), Error::MarkerLimit);
+    assert_eq!(
+        mark(scratchpad).unwrap_err(),
+        Error::MarkerLimit,
+    );
 
     // Release marker `c`.
     drop(c);
@@ -250,8 +269,8 @@ fn validate_basic_operations<'scratchpad, MF, CF, M>(
                 core::usize::MAX,
                 16 + a_padding,
                 core::usize::MAX,
-                28 + a_padding
-            ][..]
+                28 + a_padding,
+            ][..],
         ),
     );
 
@@ -296,7 +315,12 @@ fn validate_front_operations() {
     validate_basic_operations(
         &scratchpad,
         |scratchpad| scratchpad.mark_front(),
-        |stack| (stack.iter().map(|x| *x).collect(), ArrayVec::new()),
+        |stack| {
+            (
+                stack.iter().map(|x| *x).collect(),
+                ArrayVec::new(),
+            )
+        },
     );
 }
 
