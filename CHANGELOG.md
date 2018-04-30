@@ -9,9 +9,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - `Marker::concat()` for concatenating a series of strings into a single
   string slice allocated from the marker on which it is called.
 
+### Changed
+- Replaced data reference in `Allocation` with a raw pointer, allowing the
+  removal of the nebulous `'t` lifetime in the `Allocation` type and `Marker`
+  methods (conceptually, an `Allocation` instance owns its data, and this
+  helps clarify that ownership).
+
 ### Removed
-- Unnecessary `'t` lifetime parameter from `Allocation` and all allocation
-  methods.
 - Reference to creating static instances of `Scratchpad` from README
   (overlooked when correcting the crate documentation for version 0.2.0).
 
