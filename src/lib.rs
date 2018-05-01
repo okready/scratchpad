@@ -11,9 +11,11 @@
 //! # Table of Contents
 //!
 //! - [Overview](#overview)
+//!   - [General Usage](#general-usage)
+//!   - [Additional Functionality](#additional-functionality)
+//!   - [Use Cases](#use-cases)
 //! - [Crate Features](#crate-features)
 //! - [Examples](#examples)
-//! - [String Concatenation](#string-concatenation)
 //! - [Memory Management](#memory-management)
 //!   - [Buffer Types](#buffer-types)
 //!   - [Macros and Functions for Handling Buffers](#macros-and-functions-for-handling-buffers)
@@ -34,6 +36,8 @@
 //! allocation buffer) to allow different types of allocations with possibly
 //! overlapping lifecycles to be made from each end.
 //!
+//! ## General Usage
+//!
 //! Groups of allocations are partitioned using [`Marker`] objects. Markers
 //! can be set at the [front][`mark_front()`] or [back][`mark_back()`] of a
 //! scratchpad. Allocations can be made from either a front or back marker as
@@ -49,6 +53,20 @@
 //! memory is not made available for reuse until any subsequently set markers
 //! of the same type (front versus back) have also been dropped. This behavior
 //! allows allocations and frees to be performed relatively quickly.
+//!
+//! ## Additional Functionality
+//!
+//! Aside from general memory management routines, the crate also provides a
+//! couple additional features:
+//!
+//! - **Allocation concatenation.** The [`Allocation::concat()`] method allows
+//!   for combining two adjacent allocations of a single element, array, or
+//!   slice of a given type into a single slice allocation.
+//! - **String concatenation.** The [`Marker::concat()`] method takes a
+//!   collection of strings and, if enough space is available, returns
+//!   an allocation containing a [`str`] slice with the concatenated result.
+//!
+//! ## Use Cases
 //!
 //! Some cases for which [`Scratchpad`] can be useful include:
 //!
@@ -172,7 +190,7 @@
 //! /// ever work with `f32` data.
 //! pub fn process_float_sequences<I, E, S>(
 //!     sequences: I,
-//! ) -> Result<libfoo::SequenceResult, scratchpad::Error>
+//! ) -> Result<libfoo::SequenceResult, scratchpad::AllocateError>
 //! where
 //!     I: IntoIterator<Item = S, IntoIter = E>,
 //!     E: ExactSizeIterator<Item = S>,
@@ -219,14 +237,6 @@
 //!     );
 //! }
 //! ```
-//!
-//! # String Concatenation
-//!
-//! A useful secondary feature of the crate is the ability to easily
-//! concatenate an arbitrary number of strings without requiring heap memory.
-//! Concatenation is performed using the [`Marker::concat()`] method, which
-//! takes a collection of strings and, if enough space is available, returns
-//! an allocation containing a [`str`] slice with the concatenated result.
 //!
 //! # Memory Management
 //!
@@ -563,7 +573,7 @@ macro_rules! array_len_for_markers {
 /// #[macro_use]
 /// extern crate scratchpad;
 ///
-/// use scratchpad::{CacheAligned, Error, Scratchpad};
+/// use scratchpad::{AllocateError, CacheAligned, Scratchpad};
 ///
 /// // `BufferType` is the same as `[CacheAligned; 1]` on targets using 32-bit
 /// // pointers and `[CacheAligned; 2]` on targets using 64-bit pointers.
@@ -584,7 +594,10 @@ macro_rules! array_len_for_markers {
 ///     markers.push(scratchpad.mark_front().unwrap());
 /// }
 ///
-/// assert_eq!(scratchpad.mark_front().unwrap_err(), Error::MarkerLimit);
+/// assert_eq!(
+///     scratchpad.mark_front().unwrap_err(),
+///     AllocateError::MarkerLimit,
+/// );
 /// # }
 /// ```
 ///
@@ -699,11 +712,12 @@ macro_rules! cache_aligned_zeroed_for_markers {
 /// [`CacheAligned`]: struct.CacheAligned.html
 pub const CACHE_ALIGNMENT: usize = 64;
 
-/// [`Scratchpad`] allocation errors.
+/// [`Scratchpad`] and [`Marker`] allocation errors.
 ///
+/// [`Marker`]: trait.Marker.html
 /// [`Scratchpad`]: struct.Scratchpad.html
 #[derive(Debug, PartialEq)]
-pub enum Error {
+pub enum AllocateError {
     /// Maximum number of scratchpad markers are currently set.
     MarkerLimit,
     /// Allocation cannot be made because the marker is not the most-recently
@@ -716,36 +730,74 @@ pub enum Error {
     Overflow,
 }
 
-impl fmt::Display for Error {
+impl fmt::Display for AllocateError {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &Error::MarkerLimit => {
+            &AllocateError::MarkerLimit => {
                 write!(f, "scratchpad marker limit reached")
             }
-            &Error::MarkerLocked => {
+            &AllocateError::MarkerLocked => {
                 write!(f, "marker is not the most recent active marker")
             }
-            &Error::InsufficientMemory => {
+            &AllocateError::InsufficientMemory => {
                 write!(f, "insufficient allocation buffer space")
             }
-            &Error::Overflow => write!(f, "integer overflow"),
+            &AllocateError::Overflow => write!(f, "integer overflow"),
         }
     }
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for Error {
+impl std::error::Error for AllocateError {
     fn description(&self) -> &str {
         match self {
-            &Error::MarkerLimit => "scratchpad marker limit reached",
-            &Error::MarkerLocked => {
+            &AllocateError::MarkerLimit => "scratchpad marker limit reached",
+            &AllocateError::MarkerLocked => {
                 "marker is not the most recent active marker"
             }
-            &Error::InsufficientMemory => {
+            &AllocateError::InsufficientMemory => {
                 "insufficient allocation buffer space"
             }
-            &Error::Overflow => "integer overflow",
+            &AllocateError::Overflow => "integer overflow",
+        }
+    }
+}
+
+/// [`Allocation`] concatenation errors.
+///
+/// [`Allocation`]: struct.Allocation.html
+#[derive(Debug, PartialEq)]
+pub enum ConcatError {
+    /// Allocations are not in order.
+    OutOfOrder,
+    /// Allocations are not adjacent in memory.
+    NotAdjacent,
+}
+
+impl fmt::Display for ConcatError {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            &ConcatError::OutOfOrder => {
+                write!(f, "allocations specified out-of-order")
+            }
+            &ConcatError::NotAdjacent => {
+                write!(f, "allocations are not adjacent in memory")
+            }
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for ConcatError {
+    #[inline]
+    fn description(&self) -> &str {
+        match self {
+            &ConcatError::OutOfOrder => "allocations specified out-of-order",
+            &ConcatError::NotAdjacent => {
+                "allocations are not adjacent in memory"
+            }
         }
     }
 }
@@ -902,59 +954,6 @@ where
     }
 }
 
-/// Macro for generating `Buffer` implementations for static arrays.
-macro_rules! generate_buffer_impl {
-    ($size:expr) => {
-        impl<T> Buffer for [T; $size]
-        where
-            T: ByteData,
-        {
-            #[inline]
-            fn as_bytes(&self) -> &[u8] {
-                let data = &self[..];
-                unsafe { slice::from_raw_parts (
-                    data.as_ptr() as *const u8,
-                    data.len() * size_of::<T>(),
-                ) }
-            }
-
-            #[inline]
-            fn as_bytes_mut(&mut self) -> &mut [u8] {
-                let data = &mut self[..];
-                unsafe { slice::from_raw_parts_mut (
-                    data.as_mut_ptr() as *mut u8,
-                    data.len() * size_of::<T>(),
-                ) }
-            }
-        }
-
-        unsafe impl<T> StaticBuffer for [T; $size]
-        where
-            T: ByteData,
-        {}
-    };
-
-    ($size:expr, $($other:tt)*) => {
-        generate_buffer_impl!($size);
-        generate_buffer_impl!($($other)*);
-    };
-
-    () => {};
-}
-
-generate_buffer_impl!(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
-generate_buffer_impl!(11, 12, 13, 14, 15, 16, 17, 18, 19, 20);
-generate_buffer_impl!(21, 22, 23, 24, 25, 26, 27, 28, 29, 30);
-generate_buffer_impl!(31, 32, 33, 34, 35, 36, 37, 38, 39, 40);
-generate_buffer_impl!(41, 42, 43, 44, 45, 46, 47, 48, 49, 50);
-generate_buffer_impl!(51, 52, 53, 54, 55, 56, 57, 58, 59, 60);
-generate_buffer_impl!(61, 62, 63, 64);
-generate_buffer_impl!(0x80, 0x100, 0x200, 0x400, 0x800, 0x1000, 0x2000);
-generate_buffer_impl!(0x4000, 0x8000, 0x10000, 0x20000, 0x40000, 0x80000);
-generate_buffer_impl!(0x100000, 0x200000, 0x400000, 0x800000, 0x1000000);
-generate_buffer_impl!(0x2000000, 0x4000000, 0x8000000, 0x10000000);
-generate_buffer_impl!(0x20000000, 0x40000000);
-
 /// Trait for [`Scratchpad`] allocation tracking containers.
 ///
 /// Each [`Marker`] is tracked within a [`Scratchpad`] using only a single
@@ -1013,6 +1012,94 @@ where
         contents[index]
     }
 }
+
+/// Trait for converting mutable references to slices (used by [`Allocation`]
+/// concatenation).
+///
+/// [`Allocation`]: struct.Allocation.html
+pub trait AsMutSlice<T> {
+    /// Converts the given mutable reference to a slice reference of the
+    /// target type (if it is not already one).
+    fn as_mut_slice(&mut self) -> &mut [T];
+}
+
+impl<T> AsMutSlice<T> for [T] {
+    #[inline]
+    fn as_mut_slice(&mut self) -> &mut [T] {
+        self
+    }
+}
+
+impl<T> AsMutSlice<T> for T {
+    #[inline]
+    fn as_mut_slice(&mut self) -> &mut [T] {
+        unsafe { slice::from_raw_parts_mut(self, 1) }
+    }
+}
+
+/// Macro for generating trait implementations for static arrays.
+macro_rules! generate_array_trait_impls {
+    ($size:expr) => {
+        impl<T> Buffer for [T; $size]
+        where
+            T: ByteData,
+        {
+            #[inline]
+            fn as_bytes(&self) -> &[u8] {
+                let data = &self[..];
+                unsafe { slice::from_raw_parts (
+                    data.as_ptr() as *const u8,
+                    data.len() * size_of::<T>(),
+                ) }
+            }
+
+            #[inline]
+            fn as_bytes_mut(&mut self) -> &mut [u8] {
+                let data = &mut self[..];
+                unsafe { slice::from_raw_parts_mut (
+                    data.as_mut_ptr() as *mut u8,
+                    data.len() * size_of::<T>(),
+                ) }
+            }
+        }
+
+        unsafe impl<T> StaticBuffer for [T; $size]
+        where
+            T: ByteData,
+        {}
+
+        impl<T> AsMutSlice<T> for [T; $size] {
+            #[inline]
+            fn as_mut_slice(&mut self) -> &mut [T] {
+                &mut self[..]
+            }
+        }
+    };
+
+    ($size:expr, $($other:tt)*) => {
+        generate_array_trait_impls!($size);
+        generate_array_trait_impls!($($other)*);
+    };
+
+    () => {};
+}
+
+generate_array_trait_impls!(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+generate_array_trait_impls!(11, 12, 13, 14, 15, 16, 17, 18, 19, 20);
+generate_array_trait_impls!(21, 22, 23, 24, 25, 26, 27, 28, 29, 30);
+generate_array_trait_impls!(31, 32, 33, 34, 35, 36, 37, 38, 39, 40);
+generate_array_trait_impls!(41, 42, 43, 44, 45, 46, 47, 48, 49, 50);
+generate_array_trait_impls!(51, 52, 53, 54, 55, 56, 57, 58, 59, 60);
+generate_array_trait_impls!(61, 62, 63, 64);
+generate_array_trait_impls!(0x80, 0x100, 0x200, 0x400, 0x800, 0x1000, 0x2000);
+generate_array_trait_impls!(
+    0x4000, 0x8000, 0x10000, 0x20000, 0x40000, 0x80000
+);
+generate_array_trait_impls!(
+    0x100000, 0x200000, 0x400000, 0x800000, 0x1000000
+);
+generate_array_trait_impls!(0x2000000, 0x4000000, 0x8000000, 0x10000000);
+generate_array_trait_impls!(0x20000000, 0x40000000);
 
 /// Front and back stacks for `Marker` tracking (used internally).
 struct MarkerStacks<TrackingT>
@@ -1100,6 +1187,153 @@ where
     }
 }
 
+impl<'marker, T> Allocation<'marker, T>
+where
+    T: ?Sized,
+{
+    /// Combines this allocation with an allocation immediately following it
+    /// in memory, returning a single slice allocation.
+    ///
+    /// Allocations must fulfill the following requirements to be able to be
+    /// concatenated:
+    ///
+    /// - Each allocation must contain an instance, array, or slice of the
+    ///   same type. Any combination of these can be used.
+    /// - Allocations must come from markers with the *exact* same lifetime.
+    ///   Concatenating allocations from different markers is possible, as the
+    ///   matching lifetimes ensure that neither marker can be invalidated
+    ///   before the combined allocation is dropped.
+    /// - The first allocation must occupy the memory *immediately before* the
+    ///   second allocation. For allocations made from a [`MarkerBack`], this
+    ///   means that the allocations need to be specified in the reverse order
+    ///   in which they were made since back markers allocate memory
+    ///   downwards.
+    /// - No gaps in memory can reside between the allocations, even if that
+    ///   memory is no longer in use.
+    ///
+    /// The first two requirements are checked at compile time, while the last
+    /// two are checked at runtime.
+    ///
+    /// It should be noted that allocations do not necessarily have to be
+    /// created from the same marker, but the markers *do* have to have the
+    ///
+    /// # Errors
+    ///
+    /// If concatenation fails, an [`Err`] is returned containing a tuple with
+    /// the following data:
+    ///
+    /// - The `self` parameter.
+    /// - The `other` parameter.
+    /// - A [`ConcatError`] variant specifying why the allocations could not
+    ///   be joined.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::{ConcatError, Scratchpad};
+    ///
+    /// let scratchpad = Scratchpad::<[i32; 8], [usize; 2]>::static_new();
+    ///
+    /// {
+    ///     let marker = scratchpad.mark_front().unwrap();
+    ///     let a = marker.allocate(1).unwrap();
+    ///     let b = marker.allocate([2, 3]).unwrap();
+    ///     let c = marker.allocate_array_with(3, |index| index as i32 + 4)
+    ///         .unwrap();
+    ///
+    ///     // `a` and `c` cannot be concatenated since they are not adjacent.
+    ///     let (a, c, error) = a.concat(c).unwrap_err();
+    ///     assert_eq!(error, ConcatError::NotAdjacent);
+    ///
+    ///     // `a`, `b`, and `c` can be concatenated as long as adjacent
+    ///     // allocations are concatenated first.
+    ///     let abc = a.concat(b.concat(c).unwrap()).unwrap();
+    ///     assert_eq!(*abc, [1, 2, 3, 4, 5, 6])
+    /// }
+    ///
+    /// {
+    ///     let marker = scratchpad.mark_back().unwrap();
+    ///     let a = marker.allocate([1]).unwrap();
+    ///     let b = marker.allocate([2, 3]).unwrap();
+    ///
+    ///     // When using a back marker, allocations must be concatenated in
+    ///     // the reverse order of creation.
+    ///     let (a, b, error) = a.concat::<i32, _>(b).unwrap_err();
+    ///     assert_eq!(error, ConcatError::OutOfOrder);
+    ///
+    ///     let ba = b.concat::<i32, _>(a).unwrap();
+    ///     assert_eq!(*ba, [2, 3, 1]);
+    /// }
+    ///
+    /// {
+    ///     // Both of the markers created here exist until the end of the
+    ///     // same scope, so their allocations can be concatenated.
+    ///     let marker_a = scratchpad.mark_front().unwrap();
+    ///     let a = marker_a.allocate(1).unwrap();
+    ///     let marker_b = scratchpad.mark_front().unwrap();
+    ///     let b = marker_b.allocate(2).unwrap();
+    ///
+    ///     let ab = a.concat(b).unwrap();
+    ///     assert_eq!(*ab, [1, 2]);
+    /// }
+    /// ```
+    ///
+    /// [`MarkerBack`]: struct.MarkerBack.html
+    /// [`Err`]: https://doc.rust-lang.org/core/result/enum.Result.html#variant.Err
+    /// [`ConcatError`]: enum.ConcatError.html
+    pub fn concat<V, U>(
+        self,
+        other: Allocation<'marker, U>,
+    ) -> Result<
+        Allocation<'marker, [V]>,
+        (
+            Allocation<'marker, T>,
+            Allocation<'marker, U>,
+            ConcatError,
+        ),
+    >
+    where
+        T: AsMutSlice<V>,
+        U: AsMutSlice<V> + ?Sized,
+        V: Sized,
+    {
+        unsafe {
+            let data0 = (&mut *self.data).as_mut_slice();
+            let data1 = (&mut *other.data).as_mut_slice();
+            let data0_len = data0.len();
+            let data1_len = data1.len();
+            assert!(data0_len <= core::isize::MAX as usize);
+            assert!(data1_len <= core::isize::MAX as usize);
+
+            let data0_start = data0.as_mut_ptr();
+            let data0_end = data0_start.offset(data0_len as isize);
+            let data1_start = data1.as_mut_ptr();
+            if data0_end != data1_start {
+                return Err((
+                    self,
+                    other,
+                    if data0_start < data1_start {
+                        ConcatError::NotAdjacent
+                    } else {
+                        ConcatError::OutOfOrder
+                    },
+                ));
+            }
+
+            forget(self);
+            forget(other);
+
+            Ok(Allocation {
+                data: slice::from_raw_parts_mut(
+                    data0_start,
+                    data0_len + data1_len,
+                ),
+                _phantom: PhantomData,
+            })
+        }
+    }
+}
+
 impl<'marker, T> Deref for Allocation<'marker, T>
 where
     T: ?Sized,
@@ -1168,7 +1402,7 @@ pub trait Marker {
     fn allocate<'marker, T>(
         &'marker self,
         value: T,
-    ) -> Result<Allocation<'marker, T>, Error> {
+    ) -> Result<Allocation<'marker, T>, AllocateError> {
         unsafe {
             self.allocate_uninitialized::<T>()
                 .map(|allocation| {
@@ -1194,7 +1428,7 @@ pub trait Marker {
     #[inline]
     fn allocate_default<'marker, T: Default>(
         &'marker self,
-    ) -> Result<Allocation<'marker, T>, Error> {
+    ) -> Result<Allocation<'marker, T>, AllocateError> {
         self.allocate(Default::default())
     }
 
@@ -1222,7 +1456,7 @@ pub trait Marker {
     #[inline]
     unsafe fn allocate_uninitialized<'marker, T>(
         &'marker self,
-    ) -> Result<Allocation<'marker, T>, Error> {
+    ) -> Result<Allocation<'marker, T>, AllocateError> {
         let data = self.allocate_memory(align_of::<T>(), size_of::<T>(), 1)?;
 
         Ok(Allocation {
@@ -1250,7 +1484,7 @@ pub trait Marker {
         &'marker self,
         len: usize,
         value: T,
-    ) -> Result<Allocation<'marker, [T]>, Error> {
+    ) -> Result<Allocation<'marker, [T]>, AllocateError> {
         unsafe {
             self.allocate_array_uninitialized(len)
                 .map(|allocation| {
@@ -1282,7 +1516,7 @@ pub trait Marker {
     fn allocate_array_default<'marker, T: Default>(
         &'marker self,
         len: usize,
-    ) -> Result<Allocation<'marker, [T]>, Error> {
+    ) -> Result<Allocation<'marker, [T]>, AllocateError> {
         unsafe {
             self.allocate_array_uninitialized(len)
                 .map(|allocation| {
@@ -1318,7 +1552,7 @@ pub trait Marker {
         &'marker self,
         len: usize,
         mut func: F,
-    ) -> Result<Allocation<'marker, [T]>, Error> {
+    ) -> Result<Allocation<'marker, [T]>, AllocateError> {
         unsafe {
             self.allocate_array_uninitialized(len)
                 .map(|allocation| {
@@ -1361,7 +1595,7 @@ pub trait Marker {
     unsafe fn allocate_array_uninitialized<'marker, T>(
         &'marker self,
         len: usize,
-    ) -> Result<Allocation<'marker, [T]>, Error> {
+    ) -> Result<Allocation<'marker, [T]>, AllocateError> {
         let data =
             self.allocate_memory(align_of::<T>(), size_of::<T>(), len)?;
 
@@ -1388,7 +1622,7 @@ pub trait Marker {
     fn concat<'marker, IntoIteratorT, IteratorT, StrT>(
         &'marker self,
         strings: IntoIteratorT,
-    ) -> Result<Allocation<'marker, str>, Error>
+    ) -> Result<Allocation<'marker, str>, AllocateError>
     where
         IntoIteratorT: IntoIterator<Item = StrT, IntoIter = IteratorT>,
         IteratorT: Iterator<Item = StrT> + Clone,
@@ -1427,7 +1661,7 @@ pub trait Marker {
         alignment: usize,
         size: usize,
         len: usize,
-    ) -> Result<*mut u8, Error>;
+    ) -> Result<*mut u8, AllocateError>;
 }
 
 /// [`Scratchpad`] marker for allocations from the front of the allocation
@@ -1471,13 +1705,13 @@ where
         alignment: usize,
         size: usize,
         len: usize,
-    ) -> Result<*mut u8, Error> {
+    ) -> Result<*mut u8, AllocateError> {
         // Make sure the marker is the top-most front marker (no allocations
         // are allowed if a more-recently created front marker is still
         // active).
         let mut markers = self.scratchpad.markers.borrow_mut();
         if markers.front != self.index + 1 {
-            return Err(Error::MarkerLocked);
+            return Err(AllocateError::MarkerLocked);
         }
 
         let alignment_mask = alignment - 1;
@@ -1485,7 +1719,8 @@ where
 
         // Pad the allocation size to match the requested alignment.
         let size = size.checked_add(alignment_mask)
-            .ok_or(Error::Overflow)? & !alignment_mask;
+            .ok_or(AllocateError::Overflow)?
+            & !alignment_mask;
         let size = size * len;
 
         // Compute the buffer range needed to accommodate the allocation size
@@ -1505,10 +1740,13 @@ where
 
         let start = start
             .checked_add(alignment_mask)
-            .ok_or(Error::Overflow)? & !alignment_mask;
-        let end = start.checked_add(size).ok_or(Error::Overflow)?;
+            .ok_or(AllocateError::Overflow)?
+            & !alignment_mask;
+        let end = start
+            .checked_add(size)
+            .ok_or(AllocateError::Overflow)?;
         if end > buffer_end {
-            return Err(Error::InsufficientMemory);
+            return Err(AllocateError::InsufficientMemory);
         }
 
         // Update this marker's offset and return the allocation.
@@ -1541,7 +1779,7 @@ where
     pub fn allocate<'marker, T>(
         &'marker self,
         value: T,
-    ) -> Result<Allocation<'marker, T>, Error> {
+    ) -> Result<Allocation<'marker, T>, AllocateError> {
         Marker::allocate(self, value)
     }
 
@@ -1561,7 +1799,7 @@ where
     #[inline(always)]
     pub fn allocate_default<'marker, T: Default>(
         &'marker self,
-    ) -> Result<Allocation<'marker, T>, Error> {
+    ) -> Result<Allocation<'marker, T>, AllocateError> {
         Marker::allocate_default(self)
     }
 
@@ -1589,7 +1827,7 @@ where
     #[inline(always)]
     pub unsafe fn allocate_uninitialized<'marker, T>(
         &'marker self,
-    ) -> Result<Allocation<'marker, T>, Error> {
+    ) -> Result<Allocation<'marker, T>, AllocateError> {
         Marker::allocate_uninitialized(self)
     }
 
@@ -1612,7 +1850,7 @@ where
         &'marker self,
         len: usize,
         value: T,
-    ) -> Result<Allocation<'marker, [T]>, Error> {
+    ) -> Result<Allocation<'marker, [T]>, AllocateError> {
         Marker::allocate_array(self, len, value)
     }
 
@@ -1634,7 +1872,7 @@ where
     pub fn allocate_array_default<'marker, T: Default>(
         &'marker self,
         len: usize,
-    ) -> Result<Allocation<'marker, [T]>, Error> {
+    ) -> Result<Allocation<'marker, [T]>, AllocateError> {
         Marker::allocate_array_default(self, len)
     }
 
@@ -1660,7 +1898,7 @@ where
         &'marker self,
         len: usize,
         func: F,
-    ) -> Result<Allocation<'marker, [T]>, Error> {
+    ) -> Result<Allocation<'marker, [T]>, AllocateError> {
         Marker::allocate_array_with(self, len, func)
     }
 
@@ -1693,7 +1931,7 @@ where
     pub unsafe fn allocate_array_uninitialized<'marker, T>(
         &'marker self,
         len: usize,
-    ) -> Result<Allocation<'marker, [T]>, Error> {
+    ) -> Result<Allocation<'marker, [T]>, AllocateError> {
         Marker::allocate_array_uninitialized(self, len)
     }
 
@@ -1715,7 +1953,7 @@ where
     pub fn concat<'marker, IntoIteratorT, IteratorT, StrT>(
         &'marker self,
         strings: IntoIteratorT,
-    ) -> Result<Allocation<'marker, str>, Error>
+    ) -> Result<Allocation<'marker, str>, AllocateError>
     where
         IntoIteratorT: IntoIterator<Item = StrT, IntoIter = IteratorT>,
         IteratorT: Iterator<Item = StrT> + Clone,
@@ -1803,13 +2041,13 @@ where
         alignment: usize,
         size: usize,
         len: usize,
-    ) -> Result<*mut u8, Error> {
+    ) -> Result<*mut u8, AllocateError> {
         // Make sure the marker is the bottom-most back marker (no allocations
         // are allowed if a more-recently created back marker is still
         // active).
         let mut markers = self.scratchpad.markers.borrow_mut();
         if markers.back != self.index {
-            return Err(Error::MarkerLocked);
+            return Err(AllocateError::MarkerLocked);
         }
 
         let alignment_mask = alignment - 1;
@@ -1817,7 +2055,8 @@ where
 
         // Pad the allocation size to match the requested alignment.
         let size = size.checked_add(alignment_mask)
-            .ok_or(Error::Overflow)? & !alignment_mask;
+            .ok_or(AllocateError::Overflow)?
+            & !alignment_mask;
         let size = size * len;
 
         // Compute the buffer range needed to accommodate the allocation size
@@ -1836,9 +2075,10 @@ where
 
         let start = buffer_end
             .checked_sub(size)
-            .ok_or(Error::Overflow)? & !alignment_mask;
+            .ok_or(AllocateError::Overflow)?
+            & !alignment_mask;
         if start < start_min {
-            return Err(Error::InsufficientMemory);
+            return Err(AllocateError::InsufficientMemory);
         }
 
         // Update this marker's offset and return the allocation.
@@ -1873,7 +2113,7 @@ where
     pub fn allocate<'marker, T>(
         &'marker self,
         value: T,
-    ) -> Result<Allocation<'marker, T>, Error> {
+    ) -> Result<Allocation<'marker, T>, AllocateError> {
         Marker::allocate(self, value)
     }
 
@@ -1893,7 +2133,7 @@ where
     #[inline(always)]
     pub fn allocate_default<'marker, T: Default>(
         &'marker self,
-    ) -> Result<Allocation<'marker, T>, Error> {
+    ) -> Result<Allocation<'marker, T>, AllocateError> {
         Marker::allocate_default(self)
     }
 
@@ -1921,7 +2161,7 @@ where
     #[inline(always)]
     pub unsafe fn allocate_uninitialized<'marker, T>(
         &'marker self,
-    ) -> Result<Allocation<'marker, T>, Error> {
+    ) -> Result<Allocation<'marker, T>, AllocateError> {
         Marker::allocate_uninitialized(self)
     }
 
@@ -1944,7 +2184,7 @@ where
         &'marker self,
         len: usize,
         value: T,
-    ) -> Result<Allocation<'marker, [T]>, Error> {
+    ) -> Result<Allocation<'marker, [T]>, AllocateError> {
         Marker::allocate_array(self, len, value)
     }
 
@@ -1966,7 +2206,7 @@ where
     pub fn allocate_array_default<'marker, T: Default>(
         &'marker self,
         len: usize,
-    ) -> Result<Allocation<'marker, [T]>, Error> {
+    ) -> Result<Allocation<'marker, [T]>, AllocateError> {
         Marker::allocate_array_default(self, len)
     }
 
@@ -1992,7 +2232,7 @@ where
         &'marker self,
         len: usize,
         func: F,
-    ) -> Result<Allocation<'marker, [T]>, Error> {
+    ) -> Result<Allocation<'marker, [T]>, AllocateError> {
         Marker::allocate_array_with(self, len, func)
     }
 
@@ -2025,7 +2265,7 @@ where
     pub unsafe fn allocate_array_uninitialized<'marker, T>(
         &'marker self,
         len: usize,
-    ) -> Result<Allocation<'marker, [T]>, Error> {
+    ) -> Result<Allocation<'marker, [T]>, AllocateError> {
         Marker::allocate_array_uninitialized(self, len)
     }
 
@@ -2047,7 +2287,7 @@ where
     pub fn concat<'marker, IntoIteratorT, IteratorT, StrT>(
         &'marker self,
         strings: IntoIteratorT,
-    ) -> Result<Allocation<'marker, str>, Error>
+    ) -> Result<Allocation<'marker, str>, AllocateError>
     where
         IntoIteratorT: IntoIterator<Item = StrT, IntoIter = IteratorT>,
         IteratorT: Iterator<Item = StrT> + Clone,
@@ -2286,7 +2526,8 @@ where
     /// ```
     pub fn mark_front<'scratchpad>(
         &'scratchpad self,
-    ) -> Result<MarkerFront<'scratchpad, BufferT, TrackingT>, Error> {
+    ) -> Result<MarkerFront<'scratchpad, BufferT, TrackingT>, AllocateError>
+    {
         let mut markers = self.markers.borrow_mut();
 
         // `markers.back` is lazy-initialized when the "unstable" feature is
@@ -2300,7 +2541,7 @@ where
 
         let index = markers.front;
         if index == markers.back {
-            return Err(Error::MarkerLimit);
+            return Err(AllocateError::MarkerLimit);
         }
 
         let buffer_offset = if index == 0 {
@@ -2332,7 +2573,8 @@ where
     /// ```
     pub fn mark_back<'scratchpad>(
         &'scratchpad self,
-    ) -> Result<MarkerBack<'scratchpad, BufferT, TrackingT>, Error> {
+    ) -> Result<MarkerBack<'scratchpad, BufferT, TrackingT>, AllocateError>
+    {
         let mut markers = self.markers.borrow_mut();
 
         // `markers.back` is lazy-initialized when the "unstable" feature is
@@ -2346,7 +2588,7 @@ where
 
         let mut index = markers.back;
         if index == markers.front {
-            return Err(Error::MarkerLimit);
+            return Err(AllocateError::MarkerLimit);
         }
 
         let buffer_offset = if index == markers.data.capacity() {

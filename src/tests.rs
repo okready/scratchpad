@@ -106,7 +106,7 @@ fn validate_basic_operations<'scratchpad, MF, CF, M>(
     mark: MF,
     conv: CF,
 ) where
-    MF: Fn(&'scratchpad SimpleScratchpad) -> Result<M, Error>,
+    MF: Fn(&'scratchpad SimpleScratchpad) -> Result<M, AllocateError>,
     CF: for<'a> Fn(
         &'a [usize]
     ) -> (
@@ -167,7 +167,7 @@ fn validate_basic_operations<'scratchpad, MF, CF, M>(
     // more recently created marker, `b`, is still active.
     assert_eq!(
         a.allocate(3u8).unwrap_err(),
-        Error::MarkerLocked,
+        AllocateError::MarkerLocked,
     );
 
     {
@@ -193,7 +193,7 @@ fn validate_basic_operations<'scratchpad, MF, CF, M>(
     // insufficient space.
     assert_eq!(
         b.allocate_array(20, 24u8).unwrap_err(),
-        Error::InsufficientMemory,
+        AllocateError::InsufficientMemory,
     );
 
     // Set a new marker, `c`.
@@ -237,7 +237,7 @@ fn validate_basic_operations<'scratchpad, MF, CF, M>(
     // our marker limit.
     assert_eq!(
         mark(scratchpad).unwrap_err(),
-        Error::MarkerLimit,
+        AllocateError::MarkerLimit,
     );
 
     // Release marker `a` and re-attempt creation of a new marker. This should
@@ -257,7 +257,7 @@ fn validate_basic_operations<'scratchpad, MF, CF, M>(
     );
     assert_eq!(
         mark(scratchpad).unwrap_err(),
-        Error::MarkerLimit,
+        AllocateError::MarkerLimit,
     );
 
     // Release marker `c`.
@@ -360,15 +360,18 @@ fn validate_memory_limits<'scratchpad, MF, OF, M, O>(
     mark: MF,
     mark_opposite: OF,
 ) where
-    MF: Fn(&'scratchpad SimpleScratchpad) -> Result<M, Error>,
-    OF: Fn(&'scratchpad SimpleScratchpad) -> Result<O, Error>,
+    MF: Fn(&'scratchpad SimpleScratchpad) -> Result<M, AllocateError>,
+    OF: Fn(&'scratchpad SimpleScratchpad) -> Result<O, AllocateError>,
     M: Marker + fmt::Debug,
     O: Marker + fmt::Debug,
 {
     let test_allocation = |bytes_available| {
         let marker = mark(scratchpad).unwrap();
         let result = marker.allocate_array(bytes_available + 1, 0u8);
-        assert_eq!(result.unwrap_err(), Error::InsufficientMemory);
+        assert_eq!(
+            result.unwrap_err(),
+            AllocateError::InsufficientMemory,
+        );
         let result = marker.allocate_array(bytes_available, 0u8);
         assert!(result.is_ok());
     };
@@ -415,8 +418,8 @@ fn validate_marker_limits<'scratchpad, MF, OF, M, O>(
     mark: MF,
     mark_opposite: OF,
 ) where
-    MF: Fn(&'scratchpad SimpleScratchpad) -> Result<M, Error>,
-    OF: Fn(&'scratchpad SimpleScratchpad) -> Result<O, Error>,
+    MF: Fn(&'scratchpad SimpleScratchpad) -> Result<M, AllocateError>,
+    OF: Fn(&'scratchpad SimpleScratchpad) -> Result<O, AllocateError>,
     M: Marker + fmt::Debug,
     O: Marker + fmt::Debug,
 {
@@ -427,7 +430,7 @@ fn validate_marker_limits<'scratchpad, MF, OF, M, O>(
         }
 
         let result = mark(scratchpad);
-        assert_eq!(result.unwrap_err(), Error::MarkerLimit);
+        assert_eq!(result.unwrap_err(), AllocateError::MarkerLimit,);
     };
 
     let mut opposite_markers = ArrayVec::<[O; MAX_MARKERS]>::new();

@@ -6,7 +6,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 ### Added
+- `Allocation::concat()` for concatenating two adjacent allocations into a
+  single slice allocation.
+- `AsMutSlice` trait for retrieving a mutable slice reference from any mutable
+  reference that can be interpreted as such (used by `Allocation::concat()` to
+  determine which combinations of allocations are compatible).
 - ZST allocation unit test.
+
+### Changed
+- Renamed `Error` to `AllocateError` to better separate it from the new
+  `ConcatError` type.
 
 ## [0.3.0] - 2018-04-30
 ### Added
