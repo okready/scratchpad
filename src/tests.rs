@@ -535,7 +535,15 @@ fn zst_test() {
     struct UnitStruct;
 
     let back_marker = scratchpad.mark_back().unwrap();
-    assert_eq!(*scratchpad.markers.borrow(), ([1usize], [1usize]));
-    let _unit = back_marker.allocate_array(12, UnitStruct).unwrap();
-    assert_eq!(*scratchpad.markers.borrow(), ([1usize], [1usize]));
+    assert_eq!(
+        *scratchpad.markers.borrow(),
+        ([1usize], [1usize]),
+    );
+    let _unit = back_marker
+        .allocate_array(12, UnitStruct)
+        .unwrap();
+    assert_eq!(
+        *scratchpad.markers.borrow(),
+        ([1usize], [1usize]),
+    );
 }
