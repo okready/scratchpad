@@ -515,3 +515,27 @@ fn allocation_drop_test() {
     // should have set the `is_active` flag to `false`.
     assert!(!is_active);
 }
+
+/// Verifies ZST allocations work properly.
+#[test]
+fn zst_test() {
+    let scratchpad = Scratchpad::<[u8; 1], [usize; 2]>::static_new();
+    let front_marker = scratchpad.mark_front().unwrap();
+
+    // Fill the scratchpad buffer so there's no space left.
+    let _byte = front_marker.allocate(0u8).unwrap();
+    assert_eq!(*scratchpad.markers.borrow(), ([1usize], []));
+
+    // Allocate a unit (zero-sized) from the front.
+    let _unit = front_marker.allocate(()).unwrap();
+    assert_eq!(*scratchpad.markers.borrow(), ([1usize], []));
+
+    // Allocate a unit struct slice from the back.
+    #[derive(Clone, Copy)]
+    struct UnitStruct;
+
+    let back_marker = scratchpad.mark_back().unwrap();
+    assert_eq!(*scratchpad.markers.borrow(), ([1usize], [1usize]));
+    let _unit = back_marker.allocate_array(12, UnitStruct).unwrap();
+    assert_eq!(*scratchpad.markers.borrow(), ([1usize], [1usize]));
+}
