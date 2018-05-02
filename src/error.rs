@@ -23,6 +23,9 @@ pub enum ErrorKind {
     MarkerLocked,
     /// Insufficient space in the scratchpad buffer for the allocation.
     InsufficientMemory,
+    /// Allocation cannot be extended since it is not the most recent
+    /// allocation in its marker.
+    NotAtEnd,
     /// Allocations being merged are not in order.
     OutOfOrder,
     /// Allocations being merged are not adjacent in memory.
@@ -187,6 +190,9 @@ impl<T> fmt::Display for Error<T> {
             ErrorKind::InsufficientMemory => {
                 write!(f, "insufficient allocation buffer space")
             }
+            ErrorKind::NotAtEnd => {
+                write!(f, "allocation not most recent from its marker")
+            }
             ErrorKind::OutOfOrder => {
                 write!(f, "allocations specified out-of-order")
             }
@@ -212,6 +218,9 @@ where
             }
             ErrorKind::InsufficientMemory => {
                 "insufficient allocation buffer space"
+            }
+            ErrorKind::NotAtEnd => {
+                "allocation not most recent from its marker"
             }
             ErrorKind::OutOfOrder => "allocations specified out-of-order",
             ErrorKind::NotAdjacent => {

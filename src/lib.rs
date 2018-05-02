@@ -60,8 +60,11 @@
 //! couple additional features:
 //!
 //! - **Allocation concatenation.** The [`Allocation::concat()`] method allows
-//!   for combining two adjacent allocations of a single element, array, or
-//!   slice of a given type into a single slice allocation.
+//!   for combining two adjacent allocations of a scalar, array, or slice of a
+//!   given type into a single slice allocation.
+//! - **Allocation extension.** The [`MarkerFront::push_back()`] and
+//!   [`MarkerBack::push_front()`] methods allow for extending allocations at
+//!   the end of their respective stacks with new data.
 //! - **String concatenation.** The [`Marker::concat()`] method takes a
 //!   collection of strings and, if enough space is available, returns
 //!   an allocation containing a [`str`] slice with the concatenated result.
@@ -410,6 +413,7 @@
 //! special considerations necessary by the user.
 //!
 //! [`Allocation`]: struct.Allocation.html
+//! [`Allocation::concat()`]: struct.Allocation.html#method.concat
 //! [`array_len_for_bytes!()`]: macro.array_len_for_bytes.html
 //! [`array_len_for_markers!()`]: macro.array_len_for_markers.html
 //! [`array_type_for_bytes!()`]: macro.array_type_for_bytes.html
@@ -427,6 +431,8 @@
 //! [`mark_front()`]: struct.Scratchpad.html#method.mark_front
 //! [`Marker`]: trait.Marker.html
 //! [`Marker::concat()`]: trait.Marker.html#method.concat
+//! [`MarkerBack::push_front()`]: struct.MarkerBack.html#method.push_front
+//! [`MarkerFront::push_back()`]: struct.MarkerFront.html#method.push_back
 //! [`Scratchpad`]: struct.Scratchpad.html
 //! [`Scratchpad::new()`]: struct.Scratchpad.html#method.new
 //! [`Scratchpad::static_new()`]: struct.Scratchpad.html#method.static_new
