@@ -12,7 +12,7 @@ use core::fmt;
 use core::ptr;
 use core::slice;
 
-use super::{AsMutSlice, ConcatError};
+use super::{AsMutSlice, Error, ErrorKind};
 use core::marker::PhantomData;
 use core::mem::forget;
 use core::ops::{Deref, DerefMut};
@@ -110,20 +110,10 @@ where
     /// It should be noted that allocations do not necessarily have to be
     /// created from the same marker, but the markers *do* have to have the
     ///
-    /// # Errors
-    ///
-    /// If concatenation fails, an [`Err`] is returned containing a tuple with
-    /// the following data:
-    ///
-    /// - The `self` parameter.
-    /// - The `other` parameter.
-    /// - A [`ConcatError`] variant specifying why the allocations could not
-    ///   be joined.
-    ///
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::{ConcatError, Scratchpad};
+    /// use scratchpad::{ErrorKind, Scratchpad};
     ///
     /// let scratchpad = Scratchpad::<[i32; 8], [usize; 2]>::static_new();
     ///
@@ -135,8 +125,9 @@ where
     ///         .unwrap();
     ///
     ///     // `a` and `c` cannot be concatenated since they are not adjacent.
-    ///     let (a, c, error) = a.concat(c).unwrap_err();
-    ///     assert_eq!(error, ConcatError::NotAdjacent);
+    ///     let error = a.concat(c).unwrap_err();
+    ///     assert_eq!(error.kind(), ErrorKind::NotAdjacent);
+    ///     let (a, c) = error.unwrap_args();
     ///
     ///     // `a`, `b`, and `c` can be concatenated as long as adjacent
     ///     // allocations are concatenated first.
@@ -151,8 +142,9 @@ where
     ///
     ///     // When using a back marker, allocations must be concatenated in
     ///     // the reverse order of creation.
-    ///     let (a, b, error) = a.concat::<i32, _>(b).unwrap_err();
-    ///     assert_eq!(error, ConcatError::OutOfOrder);
+    ///     let error = a.concat::<i32, _>(b).unwrap_err();
+    ///     assert_eq!(error.kind(), ErrorKind::OutOfOrder);
+    ///     let (a, b) = error.unwrap_args();
     ///
     ///     let ba = b.concat::<i32, _>(a).unwrap();
     ///     assert_eq!(*ba, [2, 3, 1]);
@@ -172,18 +164,12 @@ where
     /// ```
     ///
     /// [`MarkerBack`]: struct.MarkerBack.html
-    /// [`Err`]: https://doc.rust-lang.org/core/result/enum.Result.html#variant.Err
-    /// [`ConcatError`]: enum.ConcatError.html
     pub fn concat<V, U>(
         self,
         other: Allocation<'marker, U>,
     ) -> Result<
         Allocation<'marker, [V]>,
-        (
-            Allocation<'marker, T>,
-            Allocation<'marker, U>,
-            ConcatError,
-        ),
+        Error<(Allocation<'marker, T>, Allocation<'marker, U>)>,
     >
     where
         T: AsMutSlice<V>,
@@ -202,14 +188,13 @@ where
             let data0_end = data0_start.offset(data0_len as isize);
             let data1_start = data1.as_mut_ptr();
             if data0_end != data1_start {
-                return Err((
-                    self,
-                    other,
+                return Err(Error::new(
                     if data0_start < data1_start {
-                        ConcatError::NotAdjacent
+                        ErrorKind::NotAdjacent
                     } else {
-                        ConcatError::OutOfOrder
+                        ErrorKind::OutOfOrder
                     },
+                    (self, other),
                 ));
             }
 

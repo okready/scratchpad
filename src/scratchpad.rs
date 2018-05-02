@@ -10,7 +10,7 @@
 
 use core::fmt;
 
-use super::{AllocateError, Buffer, MarkerBack, MarkerFront, StaticBuffer,
+use super::{Buffer, Error, ErrorKind, MarkerBack, MarkerFront, StaticBuffer,
             Tracking};
 use core::cell::{RefCell, UnsafeCell};
 use core::mem::{size_of, uninitialized};
@@ -231,8 +231,7 @@ where
     /// ```
     pub fn mark_front<'scratchpad>(
         &'scratchpad self,
-    ) -> Result<MarkerFront<'scratchpad, BufferT, TrackingT>, AllocateError>
-    {
+    ) -> Result<MarkerFront<'scratchpad, BufferT, TrackingT>, Error<()>> {
         let mut markers = self.markers.borrow_mut();
 
         // `markers.back` is lazy-initialized when the "unstable" feature is
@@ -246,7 +245,7 @@ where
 
         let index = markers.front;
         if index == markers.back {
-            return Err(AllocateError::MarkerLimit);
+            return Err(Error::new(ErrorKind::MarkerLimit, ()));
         }
 
         let buffer_offset = if index == 0 {
@@ -278,8 +277,7 @@ where
     /// ```
     pub fn mark_back<'scratchpad>(
         &'scratchpad self,
-    ) -> Result<MarkerBack<'scratchpad, BufferT, TrackingT>, AllocateError>
-    {
+    ) -> Result<MarkerBack<'scratchpad, BufferT, TrackingT>, Error<()>> {
         let mut markers = self.markers.borrow_mut();
 
         // `markers.back` is lazy-initialized when the "unstable" feature is
@@ -293,7 +291,7 @@ where
 
         let mut index = markers.back;
         if index == markers.front {
-            return Err(AllocateError::MarkerLimit);
+            return Err(Error::new(ErrorKind::MarkerLimit, ()));
         }
 
         let buffer_offset = if index == markers.data.capacity() {

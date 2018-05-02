@@ -14,8 +14,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - ZST allocation unit test.
 
 ### Changed
-- Renamed `Error` to `AllocateError` to better separate it from the new
-  `ConcatError` type.
+- Replaced the simple `Error` enum with an `Error` struct that provides the
+  error category (an `ErrorKind` enum variant based on the old `Error` enum)
+  and any values whose ownership was intended to be passed to the callee. This
+  allows the caller to reuse such values if an operation fails instead of
+  simply throwing them away.
 
 ## [0.3.0] - 2018-04-30
 ### Added

@@ -11,7 +11,7 @@
 use core::ptr;
 use core::slice;
 
-use super::{AllocateError, Allocation, Buffer, Scratchpad, Tracking};
+use super::{Allocation, Buffer, Error, ErrorKind, Scratchpad, Tracking};
 use core::marker::PhantomData;
 use core::mem::{align_of, size_of, transmute};
 
@@ -41,13 +41,15 @@ pub trait Marker {
     fn allocate<'marker, T>(
         &'marker self,
         value: T,
-    ) -> Result<Allocation<'marker, T>, AllocateError> {
+    ) -> Result<Allocation<'marker, T>, Error<(T,)>> {
         unsafe {
-            self.allocate_uninitialized::<T>()
-                .map(|allocation| {
+            match self.allocate_uninitialized::<T>() {
+                Ok(allocation) => {
                     ptr::write(allocation.data, value);
-                    allocation
-                })
+                    Ok(allocation)
+                }
+                Err(e) => Err(e.map(|_| (value,))),
+            }
         }
     }
 
@@ -67,8 +69,9 @@ pub trait Marker {
     #[inline]
     fn allocate_default<'marker, T: Default>(
         &'marker self,
-    ) -> Result<Allocation<'marker, T>, AllocateError> {
+    ) -> Result<Allocation<'marker, T>, Error<()>> {
         self.allocate(Default::default())
+            .map_err(|e| e.map(|_| ()))
     }
 
     /// Allocates uninitialized space for the given type.
@@ -95,7 +98,7 @@ pub trait Marker {
     #[inline]
     unsafe fn allocate_uninitialized<'marker, T>(
         &'marker self,
-    ) -> Result<Allocation<'marker, T>, AllocateError> {
+    ) -> Result<Allocation<'marker, T>, Error<()>> {
         let data = self.allocate_memory(align_of::<T>(), size_of::<T>(), 1)?;
 
         Ok(Allocation {
@@ -123,7 +126,7 @@ pub trait Marker {
         &'marker self,
         len: usize,
         value: T,
-    ) -> Result<Allocation<'marker, [T]>, AllocateError> {
+    ) -> Result<Allocation<'marker, [T]>, Error<(T,)>> {
         unsafe {
             self.allocate_array_uninitialized(len)
                 .map(|allocation| {
@@ -134,6 +137,7 @@ pub trait Marker {
                     }
                     allocation
                 })
+                .map_err(|e| e.map(|_| (value,)))
         }
     }
 
@@ -155,7 +159,7 @@ pub trait Marker {
     fn allocate_array_default<'marker, T: Default>(
         &'marker self,
         len: usize,
-    ) -> Result<Allocation<'marker, [T]>, AllocateError> {
+    ) -> Result<Allocation<'marker, [T]>, Error<()>> {
         unsafe {
             self.allocate_array_uninitialized(len)
                 .map(|allocation| {
@@ -191,7 +195,7 @@ pub trait Marker {
         &'marker self,
         len: usize,
         mut func: F,
-    ) -> Result<Allocation<'marker, [T]>, AllocateError> {
+    ) -> Result<Allocation<'marker, [T]>, Error<()>> {
         unsafe {
             self.allocate_array_uninitialized(len)
                 .map(|allocation| {
@@ -234,7 +238,7 @@ pub trait Marker {
     unsafe fn allocate_array_uninitialized<'marker, T>(
         &'marker self,
         len: usize,
-    ) -> Result<Allocation<'marker, [T]>, AllocateError> {
+    ) -> Result<Allocation<'marker, [T]>, Error<()>> {
         let data =
             self.allocate_memory(align_of::<T>(), size_of::<T>(), len)?;
 
@@ -261,7 +265,7 @@ pub trait Marker {
     fn concat<'marker, IntoIteratorT, IteratorT, StrT>(
         &'marker self,
         strings: IntoIteratorT,
-    ) -> Result<Allocation<'marker, str>, AllocateError>
+    ) -> Result<Allocation<'marker, str>, Error<()>>
     where
         IntoIteratorT: IntoIterator<Item = StrT, IntoIter = IteratorT>,
         IteratorT: Iterator<Item = StrT> + Clone,
@@ -300,7 +304,7 @@ pub trait Marker {
         alignment: usize,
         size: usize,
         len: usize,
-    ) -> Result<*mut u8, AllocateError>;
+    ) -> Result<*mut u8, Error<()>>;
 }
 
 /// [`Scratchpad`] marker for allocations from the front of the allocation
@@ -344,13 +348,13 @@ where
         alignment: usize,
         size: usize,
         len: usize,
-    ) -> Result<*mut u8, AllocateError> {
+    ) -> Result<*mut u8, Error<()>> {
         // Make sure the marker is the top-most front marker (no allocations
         // are allowed if a more-recently created front marker is still
         // active).
         let mut markers = self.scratchpad.markers.borrow_mut();
         if markers.front != self.index + 1 {
-            return Err(AllocateError::MarkerLocked);
+            return Err(Error::new(ErrorKind::MarkerLocked, ()));
         }
 
         let alignment_mask = alignment - 1;
@@ -358,7 +362,7 @@ where
 
         // Pad the allocation size to match the requested alignment.
         let size = size.checked_add(alignment_mask)
-            .ok_or(AllocateError::Overflow)?
+            .ok_or_else(|| Error::new(ErrorKind::Overflow, ()))?
             & !alignment_mask;
         let size = size * len;
 
@@ -379,13 +383,13 @@ where
 
         let start = start
             .checked_add(alignment_mask)
-            .ok_or(AllocateError::Overflow)?
+            .ok_or_else(|| Error::new(ErrorKind::Overflow, ()))?
             & !alignment_mask;
         let end = start
             .checked_add(size)
-            .ok_or(AllocateError::Overflow)?;
+            .ok_or_else(|| Error::new(ErrorKind::Overflow, ()))?;
         if end > buffer_end {
-            return Err(AllocateError::InsufficientMemory);
+            return Err(Error::new(ErrorKind::InsufficientMemory, ()));
         }
 
         // Update this marker's offset and return the allocation.
@@ -418,7 +422,7 @@ where
     pub fn allocate<'marker, T>(
         &'marker self,
         value: T,
-    ) -> Result<Allocation<'marker, T>, AllocateError> {
+    ) -> Result<Allocation<'marker, T>, Error<(T,)>> {
         Marker::allocate(self, value)
     }
 
@@ -438,7 +442,7 @@ where
     #[inline(always)]
     pub fn allocate_default<'marker, T: Default>(
         &'marker self,
-    ) -> Result<Allocation<'marker, T>, AllocateError> {
+    ) -> Result<Allocation<'marker, T>, Error<()>> {
         Marker::allocate_default(self)
     }
 
@@ -466,7 +470,7 @@ where
     #[inline(always)]
     pub unsafe fn allocate_uninitialized<'marker, T>(
         &'marker self,
-    ) -> Result<Allocation<'marker, T>, AllocateError> {
+    ) -> Result<Allocation<'marker, T>, Error<()>> {
         Marker::allocate_uninitialized(self)
     }
 
@@ -489,7 +493,7 @@ where
         &'marker self,
         len: usize,
         value: T,
-    ) -> Result<Allocation<'marker, [T]>, AllocateError> {
+    ) -> Result<Allocation<'marker, [T]>, Error<(T,)>> {
         Marker::allocate_array(self, len, value)
     }
 
@@ -511,7 +515,7 @@ where
     pub fn allocate_array_default<'marker, T: Default>(
         &'marker self,
         len: usize,
-    ) -> Result<Allocation<'marker, [T]>, AllocateError> {
+    ) -> Result<Allocation<'marker, [T]>, Error<()>> {
         Marker::allocate_array_default(self, len)
     }
 
@@ -537,7 +541,7 @@ where
         &'marker self,
         len: usize,
         func: F,
-    ) -> Result<Allocation<'marker, [T]>, AllocateError> {
+    ) -> Result<Allocation<'marker, [T]>, Error<()>> {
         Marker::allocate_array_with(self, len, func)
     }
 
@@ -570,7 +574,7 @@ where
     pub unsafe fn allocate_array_uninitialized<'marker, T>(
         &'marker self,
         len: usize,
-    ) -> Result<Allocation<'marker, [T]>, AllocateError> {
+    ) -> Result<Allocation<'marker, [T]>, Error<()>> {
         Marker::allocate_array_uninitialized(self, len)
     }
 
@@ -592,7 +596,7 @@ where
     pub fn concat<'marker, IntoIteratorT, IteratorT, StrT>(
         &'marker self,
         strings: IntoIteratorT,
-    ) -> Result<Allocation<'marker, str>, AllocateError>
+    ) -> Result<Allocation<'marker, str>, Error<()>>
     where
         IntoIteratorT: IntoIterator<Item = StrT, IntoIter = IteratorT>,
         IteratorT: Iterator<Item = StrT> + Clone,
@@ -680,13 +684,13 @@ where
         alignment: usize,
         size: usize,
         len: usize,
-    ) -> Result<*mut u8, AllocateError> {
+    ) -> Result<*mut u8, Error<()>> {
         // Make sure the marker is the bottom-most back marker (no allocations
         // are allowed if a more-recently created back marker is still
         // active).
         let mut markers = self.scratchpad.markers.borrow_mut();
         if markers.back != self.index {
-            return Err(AllocateError::MarkerLocked);
+            return Err(Error::new(ErrorKind::MarkerLocked, ()));
         }
 
         let alignment_mask = alignment - 1;
@@ -694,7 +698,7 @@ where
 
         // Pad the allocation size to match the requested alignment.
         let size = size.checked_add(alignment_mask)
-            .ok_or(AllocateError::Overflow)?
+            .ok_or_else(|| Error::new(ErrorKind::Overflow, ()))?
             & !alignment_mask;
         let size = size * len;
 
@@ -714,10 +718,10 @@ where
 
         let start = buffer_end
             .checked_sub(size)
-            .ok_or(AllocateError::Overflow)?
+            .ok_or_else(|| Error::new(ErrorKind::Overflow, ()))?
             & !alignment_mask;
         if start < start_min {
-            return Err(AllocateError::InsufficientMemory);
+            return Err(Error::new(ErrorKind::InsufficientMemory, ()));
         }
 
         // Update this marker's offset and return the allocation.
@@ -752,7 +756,7 @@ where
     pub fn allocate<'marker, T>(
         &'marker self,
         value: T,
-    ) -> Result<Allocation<'marker, T>, AllocateError> {
+    ) -> Result<Allocation<'marker, T>, Error<(T,)>> {
         Marker::allocate(self, value)
     }
 
@@ -772,7 +776,7 @@ where
     #[inline(always)]
     pub fn allocate_default<'marker, T: Default>(
         &'marker self,
-    ) -> Result<Allocation<'marker, T>, AllocateError> {
+    ) -> Result<Allocation<'marker, T>, Error<()>> {
         Marker::allocate_default(self)
     }
 
@@ -800,7 +804,7 @@ where
     #[inline(always)]
     pub unsafe fn allocate_uninitialized<'marker, T>(
         &'marker self,
-    ) -> Result<Allocation<'marker, T>, AllocateError> {
+    ) -> Result<Allocation<'marker, T>, Error<()>> {
         Marker::allocate_uninitialized(self)
     }
 
@@ -823,7 +827,7 @@ where
         &'marker self,
         len: usize,
         value: T,
-    ) -> Result<Allocation<'marker, [T]>, AllocateError> {
+    ) -> Result<Allocation<'marker, [T]>, Error<(T,)>> {
         Marker::allocate_array(self, len, value)
     }
 
@@ -845,7 +849,7 @@ where
     pub fn allocate_array_default<'marker, T: Default>(
         &'marker self,
         len: usize,
-    ) -> Result<Allocation<'marker, [T]>, AllocateError> {
+    ) -> Result<Allocation<'marker, [T]>, Error<()>> {
         Marker::allocate_array_default(self, len)
     }
 
@@ -871,7 +875,7 @@ where
         &'marker self,
         len: usize,
         func: F,
-    ) -> Result<Allocation<'marker, [T]>, AllocateError> {
+    ) -> Result<Allocation<'marker, [T]>, Error<()>> {
         Marker::allocate_array_with(self, len, func)
     }
 
@@ -904,7 +908,7 @@ where
     pub unsafe fn allocate_array_uninitialized<'marker, T>(
         &'marker self,
         len: usize,
-    ) -> Result<Allocation<'marker, [T]>, AllocateError> {
+    ) -> Result<Allocation<'marker, [T]>, Error<()>> {
         Marker::allocate_array_uninitialized(self, len)
     }
 
@@ -926,7 +930,7 @@ where
     pub fn concat<'marker, IntoIteratorT, IteratorT, StrT>(
         &'marker self,
         strings: IntoIteratorT,
-    ) -> Result<Allocation<'marker, str>, AllocateError>
+    ) -> Result<Allocation<'marker, str>, Error<()>>
     where
         IntoIteratorT: IntoIterator<Item = StrT, IntoIter = IteratorT>,
         IteratorT: Iterator<Item = StrT> + Clone,

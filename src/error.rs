@@ -9,13 +9,13 @@
 //! Error support.
 
 use core::fmt;
+use core::ptr;
 
-/// [`Scratchpad`] and [`Marker`] allocation errors.
-///
-/// [`Marker`]: trait.Marker.html
-/// [`Scratchpad`]: struct.Scratchpad.html
-#[derive(Debug, PartialEq)]
-pub enum AllocateError {
+use core::mem::forget;
+
+/// Categories of errors during scratchpad operations.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ErrorKind {
     /// Maximum number of scratchpad markers are currently set.
     MarkerLimit,
     /// Allocation cannot be made because the marker is not the most-recently
@@ -23,79 +23,201 @@ pub enum AllocateError {
     MarkerLocked,
     /// Insufficient space in the scratchpad buffer for the allocation.
     InsufficientMemory,
+    /// Allocations being merged are not in order.
+    OutOfOrder,
+    /// Allocations being merged are not adjacent in memory.
+    NotAdjacent,
     /// Integer overflow detected (typically due to a very large size or
     /// alignment).
     Overflow,
 }
 
-impl fmt::Display for AllocateError {
+/// The error type for scratchpad operations.
+///
+/// Various scratchpad operations require ownership of some or all of their
+/// parameters to the callee, such as for storage in a new allocation. If such
+/// operations fail, the caller may still want to do something with the data
+/// originally provided. This type encapsulates both the kind of error that
+/// occurred and any "owned" parameters that were passed so that the caller
+/// can have them back.
+#[derive(Debug)]
+pub struct Error<T> {
+    /// "Owned" arguments passed to the function.
+    args: T,
+    /// Type of error that occurred.
+    kind: ErrorKind,
+}
+
+impl<T> Error<T> {
+    /// Creates a new error with the specified category and argument values.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::{Error, ErrorKind};
+    ///
+    /// // Error containing multiple recycled arguments.
+    /// let multi_error = Error::new(
+    ///     ErrorKind::MarkerLocked,
+    ///     (3.14159f32, 2.71828f32),
+    /// );
+    ///
+    /// // Error containing a single recycled argument. A tuple is still used
+    /// // to remain consistent with errors that recycle multiple argument
+    /// // values.
+    /// let single_error = Error::new(ErrorKind::MarkerLocked, (3.14159f32,));
+    ///
+    /// // Error containing no recycled argument values. A unit is used by the
+    /// // crate to signify an empty set of arguments.
+    /// let simple_error = Error::new(ErrorKind::MarkerLocked, ());
+    /// ```
+    #[inline]
+    pub fn new(kind: ErrorKind, args: T) -> Self {
+        Error { args, kind }
+    }
+
+    /// Returns the category of error that occurred.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::{Error, ErrorKind};
+    ///
+    /// let error = Error::new(
+    ///     ErrorKind::MarkerLocked,
+    ///     (3.14159f32, 2.71828f32),
+    /// );
+    ///
+    /// let kind = error.kind();
+    /// assert_eq!(kind, ErrorKind::MarkerLocked);
+    /// ```
+    #[inline]
+    pub fn kind(&self) -> ErrorKind {
+        self.kind
+    }
+
+    /// Returns a tuple containing values that would have passed ownership to
+    /// the callee if the operation was successful.
+    ///
+    /// While there's no constraint on the arguments type, this crate will
+    /// only ever produce errors that have either a [unit] or [tuple] for its
+    /// arguments, even if only a single value is returned to the caller.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::{Error, ErrorKind};
+    ///
+    /// let error = Error::new(
+    ///     ErrorKind::MarkerLocked,
+    ///     (3.14159f32, 2.71828f32),
+    /// );
+    ///
+    /// let args = error.args();
+    /// assert_eq!(args, &(3.14159f32, 2.71828f32));
+    /// ```
+    ///
+    /// [unit]: https://doc.rust-lang.org/std/primitive.unit.html
+    /// [tuple]: https://doc.rust-lang.org/std/primitive.tuple.html
+    #[inline]
+    pub fn args(&self) -> &T {
+        &self.args
+    }
+
+    /// Unwraps the error, yielding a tuple containing values that would have
+    /// passed ownership to the callee if the operation was successful.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::{Error, ErrorKind};
+    ///
+    /// let error = Error::new(
+    ///     ErrorKind::MarkerLocked,
+    ///     (3.14159f32, 2.71828f32),
+    /// );
+    ///
+    /// let (x, y) = error.unwrap_args();
+    /// assert_eq!(x, 3.14159f32);
+    /// assert_eq!(y, 2.71828f32);
+    /// ```
+    #[inline]
+    pub fn unwrap_args(self) -> T {
+        unsafe {
+            let args = ptr::read(&self.args);
+            forget(self);
+            args
+        }
+    }
+
+    /// Maps an `Error<T>` to an `Error<U>` by applying a function to the
+    /// contained arguments value, leaving the `ErrorKind` value untouched.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::{Error, ErrorKind};
+    ///
+    /// let error = Error::new(ErrorKind::MarkerLocked, (-12, 23));
+    ///
+    /// let new_error = error.map(|args| (args.1 as i64 * -2,));
+    /// assert_eq!(new_error.args().0, -46i64);
+    /// ```
+    #[inline]
+    pub fn map<U, F>(self, op: F) -> Error<U>
+    where
+        F: FnOnce(T) -> U,
+    {
+        let kind = self.kind;
+        let args = op(self.unwrap_args());
+        Error { args, kind }
+    }
+}
+
+impl<T> fmt::Display for Error<T> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            &AllocateError::MarkerLimit => {
+        match self.kind {
+            ErrorKind::MarkerLimit => {
                 write!(f, "scratchpad marker limit reached")
             }
-            &AllocateError::MarkerLocked => {
+            ErrorKind::MarkerLocked => {
                 write!(f, "marker is not the most recent active marker")
             }
-            &AllocateError::InsufficientMemory => {
+            ErrorKind::InsufficientMemory => {
                 write!(f, "insufficient allocation buffer space")
             }
-            &AllocateError::Overflow => write!(f, "integer overflow"),
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl ::std::error::Error for AllocateError {
-    fn description(&self) -> &str {
-        match self {
-            &AllocateError::MarkerLimit => "scratchpad marker limit reached",
-            &AllocateError::MarkerLocked => {
-                "marker is not the most recent active marker"
-            }
-            &AllocateError::InsufficientMemory => {
-                "insufficient allocation buffer space"
-            }
-            &AllocateError::Overflow => "integer overflow",
-        }
-    }
-}
-
-/// [`Allocation`] concatenation errors.
-///
-/// [`Allocation`]: struct.Allocation.html
-#[derive(Debug, PartialEq)]
-pub enum ConcatError {
-    /// Allocations are not in order.
-    OutOfOrder,
-    /// Allocations are not adjacent in memory.
-    NotAdjacent,
-}
-
-impl fmt::Display for ConcatError {
-    #[inline]
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            &ConcatError::OutOfOrder => {
+            ErrorKind::OutOfOrder => {
                 write!(f, "allocations specified out-of-order")
             }
-            &ConcatError::NotAdjacent => {
+            ErrorKind::NotAdjacent => {
                 write!(f, "allocations are not adjacent in memory")
             }
+            ErrorKind::Overflow => write!(f, "integer overflow"),
         }
     }
 }
 
 #[cfg(feature = "std")]
-impl ::std::error::Error for ConcatError {
+impl<T> ::std::error::Error for Error<T>
+where
+    T: fmt::Debug,
+{
     #[inline]
     fn description(&self) -> &str {
-        match self {
-            &ConcatError::OutOfOrder => "allocations specified out-of-order",
-            &ConcatError::NotAdjacent => {
+        match self.kind {
+            ErrorKind::MarkerLimit => "scratchpad marker limit reached",
+            ErrorKind::MarkerLocked => {
+                "marker is not the most recent active marker"
+            }
+            ErrorKind::InsufficientMemory => {
+                "insufficient allocation buffer space"
+            }
+            ErrorKind::OutOfOrder => "allocations specified out-of-order",
+            ErrorKind::NotAdjacent => {
                 "allocations are not adjacent in memory"
             }
+            ErrorKind::Overflow => "integer overflow",
         }
     }
 }

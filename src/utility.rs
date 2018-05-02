@@ -115,7 +115,7 @@ macro_rules! array_len_for_markers {
 /// #[macro_use]
 /// extern crate scratchpad;
 ///
-/// use scratchpad::{AllocateError, CacheAligned, Scratchpad};
+/// use scratchpad::{CacheAligned, ErrorKind, Scratchpad};
 ///
 /// // `BufferType` is the same as `[CacheAligned; 1]` on targets using 32-bit
 /// // pointers and `[CacheAligned; 2]` on targets using 64-bit pointers.
@@ -137,8 +137,8 @@ macro_rules! array_len_for_markers {
 /// }
 ///
 /// assert_eq!(
-///     scratchpad.mark_front().unwrap_err(),
-///     AllocateError::MarkerLimit,
+///     scratchpad.mark_front().unwrap_err().kind(),
+///     ErrorKind::MarkerLimit,
 /// );
 /// # }
 /// ```

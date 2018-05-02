@@ -190,7 +190,7 @@
 //! /// ever work with `f32` data.
 //! pub fn process_float_sequences<I, E, S>(
 //!     sequences: I,
-//! ) -> Result<libfoo::SequenceResult, scratchpad::AllocateError>
+//! ) -> Result<libfoo::SequenceResult, scratchpad::Error<()>>
 //! where
 //!     I: IntoIterator<Item = S, IntoIter = E>,
 //!     E: ExactSizeIterator<Item = S>,

@@ -108,7 +108,7 @@ fn validate_basic_operations<'scratchpad, MF, CF, M>(
     mark: MF,
     conv: CF,
 ) where
-    MF: Fn(&'scratchpad SimpleScratchpad) -> Result<M, AllocateError>,
+    MF: Fn(&'scratchpad SimpleScratchpad) -> Result<M, Error<()>>,
     CF: for<'a> Fn(
         &'a [usize]
     ) -> (
@@ -168,8 +168,8 @@ fn validate_basic_operations<'scratchpad, MF, CF, M>(
     // Attempt another allocation from marker `a`, which should fail since a
     // more recently created marker, `b`, is still active.
     assert_eq!(
-        a.allocate(3u8).unwrap_err(),
-        AllocateError::MarkerLocked,
+        a.allocate(3u8).unwrap_err().kind(),
+        ErrorKind::MarkerLocked,
     );
 
     {
@@ -194,8 +194,8 @@ fn validate_basic_operations<'scratchpad, MF, CF, M>(
     // Attempt to allocate an array of 20 bytes, which should fail due to
     // insufficient space.
     assert_eq!(
-        b.allocate_array(20, 24u8).unwrap_err(),
-        AllocateError::InsufficientMemory,
+        b.allocate_array(20, 24u8).unwrap_err().kind(),
+        ErrorKind::InsufficientMemory,
     );
 
     // Set a new marker, `c`.
@@ -238,8 +238,8 @@ fn validate_basic_operations<'scratchpad, MF, CF, M>(
     // Attempt to set another marker, which should fail due to reaching
     // our marker limit.
     assert_eq!(
-        mark(scratchpad).unwrap_err(),
-        AllocateError::MarkerLimit,
+        mark(scratchpad).unwrap_err().kind(),
+        ErrorKind::MarkerLimit,
     );
 
     // Release marker `a` and re-attempt creation of a new marker. This should
@@ -258,8 +258,8 @@ fn validate_basic_operations<'scratchpad, MF, CF, M>(
         ),
     );
     assert_eq!(
-        mark(scratchpad).unwrap_err(),
-        AllocateError::MarkerLimit,
+        mark(scratchpad).unwrap_err().kind(),
+        ErrorKind::MarkerLimit,
     );
 
     // Release marker `c`.
@@ -362,8 +362,8 @@ fn validate_memory_limits<'scratchpad, MF, OF, M, O>(
     mark: MF,
     mark_opposite: OF,
 ) where
-    MF: Fn(&'scratchpad SimpleScratchpad) -> Result<M, AllocateError>,
-    OF: Fn(&'scratchpad SimpleScratchpad) -> Result<O, AllocateError>,
+    MF: Fn(&'scratchpad SimpleScratchpad) -> Result<M, Error<()>>,
+    OF: Fn(&'scratchpad SimpleScratchpad) -> Result<O, Error<()>>,
     M: Marker + fmt::Debug,
     O: Marker + fmt::Debug,
 {
@@ -371,8 +371,8 @@ fn validate_memory_limits<'scratchpad, MF, OF, M, O>(
         let marker = mark(scratchpad).unwrap();
         let result = marker.allocate_array(bytes_available + 1, 0u8);
         assert_eq!(
-            result.unwrap_err(),
-            AllocateError::InsufficientMemory,
+            result.unwrap_err().kind(),
+            ErrorKind::InsufficientMemory,
         );
         let result = marker.allocate_array(bytes_available, 0u8);
         assert!(result.is_ok());
@@ -420,8 +420,8 @@ fn validate_marker_limits<'scratchpad, MF, OF, M, O>(
     mark: MF,
     mark_opposite: OF,
 ) where
-    MF: Fn(&'scratchpad SimpleScratchpad) -> Result<M, AllocateError>,
-    OF: Fn(&'scratchpad SimpleScratchpad) -> Result<O, AllocateError>,
+    MF: Fn(&'scratchpad SimpleScratchpad) -> Result<M, Error<()>>,
+    OF: Fn(&'scratchpad SimpleScratchpad) -> Result<O, Error<()>>,
     M: Marker + fmt::Debug,
     O: Marker + fmt::Debug,
 {
@@ -432,7 +432,10 @@ fn validate_marker_limits<'scratchpad, MF, OF, M, O>(
         }
 
         let result = mark(scratchpad);
-        assert_eq!(result.unwrap_err(), AllocateError::MarkerLimit,);
+        assert_eq!(
+            result.unwrap_err().kind(),
+            ErrorKind::MarkerLimit,
+        );
     };
 
     let mut opposite_markers = ArrayVec::<[O; MAX_MARKERS]>::new();
@@ -473,6 +476,7 @@ fn validate_back_marker_limits() {
 /// Verifies `Allocation::unwrap()` works properly.
 #[test]
 fn allocation_drop_test() {
+    #[derive(Debug)]
     struct DropTest<'a> {
         is_active: &'a mut bool,
     }
@@ -536,7 +540,7 @@ fn zst_test() {
     assert_eq!(*scratchpad.markers.borrow(), ([1usize], []));
 
     // Allocate a unit struct slice from the back.
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, Debug)]
     struct UnitStruct;
 
     let back_marker = scratchpad.mark_back().unwrap();
