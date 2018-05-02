@@ -6,9 +6,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use core::fmt;
+
 use super::*;
 use arrayvec::ArrayVec;
-use core::mem::uninitialized;
+use core::mem::{align_of, uninitialized};
 
 // Trait for accessing the internals of `Marker` structs.
 trait MarkerInternal: Marker {
