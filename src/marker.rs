@@ -665,9 +665,8 @@ where
         // allocations. This will also perform all remaining validity checks.
         match self.allocate(value) {
             Err(e) => Err(e.map(|(val,)| (allocation, val))),
-            Ok(val) => match allocation.concat(val) {
-                Err(_) => unreachable!(),
-                Ok(result) => Ok(result),
+            Ok(val_alloc) => unsafe {
+                Ok(allocation.concat_unchecked(val_alloc))
             },
         }
     }
@@ -1057,9 +1056,8 @@ where
         // allocations. This will also perform all remaining validity checks.
         match self.allocate(value) {
             Err(e) => Err(e.map(|(val,)| (allocation, val))),
-            Ok(val) => match val.concat(allocation) {
-                Err(_) => unreachable!(),
-                Ok(result) => Ok(result),
+            Ok(val_alloc) => unsafe {
+                Ok(val_alloc.concat_unchecked(allocation))
             },
         }
     }

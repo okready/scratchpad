@@ -130,7 +130,7 @@ where
     ///     // `a`, `b`, and `c` can be concatenated as long as adjacent
     ///     // allocations are concatenated first.
     ///     let abc = a.concat(b.concat(c).unwrap()).unwrap();
-    ///     assert_eq!(*abc, [1, 2, 3, 4, 5, 6])
+    ///     assert_eq!(*abc, [1, 2, 3, 4, 5, 6]);
     /// }
     ///
     /// {
@@ -196,16 +196,64 @@ where
                 ));
             }
 
-            forget(self);
-            forget(other);
+            Ok(self.concat_unchecked(other))
+        }
+    }
 
-            Ok(Allocation {
-                data: NonNull::new(slice::from_raw_parts_mut(
-                    data0_start,
-                    data0_len + data1_len,
-                )).unwrap(),
-                _phantom: PhantomData,
-            })
+    /// Combines two allocations without performing any runtime checks.
+    ///
+    /// See the safe version, [`concat()`], for requirements and additional
+    /// information.
+    ///
+    /// # Safety
+    ///
+    /// This function is unsafe because it does not check whether the
+    /// allocations are adjacent in memory or whether they are specified in
+    /// the correct order (with `self` residing immediately before `other` in
+    /// memory). Calling this on allocations that do not fit these
+    /// requirements can lead to memory corruption, undefined behavior, or
+    /// crashes.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::{ErrorKind, Scratchpad};
+    ///
+    /// let scratchpad = Scratchpad::<[i32; 3], [usize; 1]>::static_new();
+    /// let marker = scratchpad.mark_front().unwrap();
+    ///
+    /// let a = marker.allocate(1).unwrap();
+    /// let b = marker.allocate([2, 3]).unwrap();
+    ///
+    /// let ab = unsafe { a.concat_unchecked(b) };
+    /// assert_eq!(*ab, [1, 2, 3]);
+    /// ```
+    ///
+    /// [`concat()`]: #method.concat
+    #[inline]
+    pub unsafe fn concat_unchecked<V, U>(
+        self,
+        other: Allocation<'marker, U>,
+    ) -> Allocation<'marker, [V]>
+    where
+        T: AsMutSlice<V>,
+        U: AsMutSlice<V> + ?Sized,
+        V: Sized,
+    {
+        let data0 = (&mut *self.data.as_ptr()).as_mut_slice();
+        let data1 = (&mut *other.data.as_ptr()).as_mut_slice();
+        let data0_len = data0.len();
+        let data1_len = data1.len();
+
+        forget(self);
+        forget(other);
+
+        Allocation {
+            data: NonNull::new(slice::from_raw_parts_mut(
+                data0.as_mut_ptr(),
+                data0_len + data1_len,
+            )).unwrap(),
+            _phantom: PhantomData,
         }
     }
 }

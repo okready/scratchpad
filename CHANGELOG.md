@@ -6,13 +6,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 ### Added
-- `Allocation::concat()` for concatenating two adjacent allocations into a
-  single slice allocation.
+- `Allocation::concat()` and `Allocation::concat_unchecked()` for
+  concatenating two adjacent allocations into a single slice allocation.
 - `MarkerFront::push_back()` and `MarkerBack::push_front()` for extending
   existing allocations at the end of their respective stacks with new data.
 - `AsMutSlice` trait for retrieving a mutable slice reference from any mutable
-  reference that can be interpreted as such (used by `Allocation::concat()` to
-  determine which combinations of allocations are compatible).
+  reference that can be interpreted as such (used by `Allocation::concat()`
+  and `Allocation::concat_unchecked()` to determine which combinations of
+  allocations are compatible).
 - ZST allocation unit test.
 
 ### Changed
