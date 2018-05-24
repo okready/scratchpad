@@ -15,6 +15,7 @@ use super::{
     Allocation, Buffer, Error, ErrorKind, IntoSliceAllocation, OwnedSlice,
     Scratchpad, Tracking,
 };
+use core::borrow::Borrow;
 use core::marker::PhantomData;
 use core::mem::{align_of, size_of, transmute};
 use core::ptr::NonNull;
@@ -655,23 +656,7 @@ where
         V: OwnedSlice<T>,
     {
         // Verify that the allocation is at the end of the marker.
-        let data = unsafe {
-            &*IntoSliceAllocation::<'marker, T>::as_slice_ptr(&allocation)
-        };
-        let data_len = data.len();
-        assert!(data_len <= ::core::isize::MAX as usize);
-
-        let data_start = data.as_ptr();
-        let data_end = unsafe { data_start.offset(data_len as isize) };
-
-        let buffer_start =
-            unsafe { (*self.scratchpad.buffer.get()).as_bytes().as_ptr() };
-        let marker_offset =
-            self.scratchpad.markers.borrow().data.get(self.index);
-        let marker_end =
-            unsafe { buffer_start.offset(marker_offset as isize) };
-
-        if data_end as usize != marker_end as usize {
+        if !self.is_allocation_at_end(&allocation) {
             return Err(Error::new(ErrorKind::NotAtEnd, (allocation, values)));
         }
 
@@ -687,6 +672,178 @@ where
                 Ok(allocation.concat_unchecked::<T, [T]>(val_alloc))
             },
         }
+    }
+
+    /// Extends an allocation by cloning values onto its end, converting the
+    /// allocation to a slice if necessary.
+    ///
+    /// The following requirements must be met to allow elements to be
+    /// appended:
+    ///
+    /// - The marker must be the most recently created front marker from its
+    ///   scratchpad.
+    /// - The allocation must contain a scalar, array, or slice of the type
+    ///   being pushed.
+    /// - The data being pushed must be a scalar, array, boxed slice, or
+    ///   vector of the same type.
+    /// - The allocation must be the most recent allocation made from this
+    ///   marker, even if other, more recent allocations have been released.
+    ///
+    /// Note that the `values` parameter is consumed as part of the allocation
+    /// process and cannot be returned on error.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::{Allocation, IntoSliceAllocation, Scratchpad};
+    ///
+    /// let scratchpad = Scratchpad::<[u32; 5], [usize; 1]>::static_new();
+    /// let marker = scratchpad.mark_front().unwrap();
+    ///
+    /// let a: Allocation<[f32]> = marker.allocate([3.14159f32, 2.71828f32])
+    ///     .unwrap()
+    ///     .into_slice_allocation();
+    ///
+    /// let ab = marker.append_clone(a, &[0.57722f32, 1.61803f32][..])
+    ///     .unwrap();
+    /// assert_eq!(*ab, [3.14159f32, 2.71828f32, 0.57722f32, 1.61803f32]);
+    /// ```
+    pub fn append_clone<'marker, T, U, IntoIteratorT, IteratorT, RefT>(
+        &'marker self,
+        allocation: Allocation<'marker, U>,
+        values: IntoIteratorT,
+    ) -> Result<Allocation<'marker, [T]>, Error<(Allocation<'marker, U>,)>>
+    where
+        T: Clone,
+        U: ?Sized,
+        Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
+        IntoIteratorT: IntoIterator<Item = RefT, IntoIter = IteratorT>,
+        IteratorT: ExactSizeIterator<Item = RefT>,
+        RefT: Borrow<T>,
+    {
+        // Verify that the allocation is at the end of the marker.
+        if !self.is_allocation_at_end(&allocation) {
+            return Err(Error::new(ErrorKind::NotAtEnd, (allocation,)));
+        }
+
+        // Create a new allocation for the value given and merge the two
+        // allocations. This will also perform all remaining validity checks.
+        let source = values.into_iter();
+        let source_len = source.len();
+        match unsafe { self.allocate_array_uninitialized(source_len) } {
+            Err(e) => Err(e.map(|()| (allocation,))),
+            Ok(mut val_alloc) => unsafe {
+                let mut index = 0;
+                for source_val in source {
+                    val_alloc[index] = source_val.borrow().clone();
+                    index += 1;
+                }
+
+                assert_eq!(index, source_len);
+
+                Ok(allocation.concat_unchecked::<T, [T]>(val_alloc))
+            },
+        }
+    }
+
+    /// Extends an allocation by copying values onto its end, converting the
+    /// allocation to a slice if necessary.
+    ///
+    /// The following requirements must be met to allow elements to be
+    /// appended:
+    ///
+    /// - The marker must be the most recently created front marker from its
+    ///   scratchpad.
+    /// - The allocation must contain a scalar, array, or slice of the type
+    ///   being pushed.
+    /// - The data being pushed must be a scalar, array, boxed slice, or
+    ///   vector of the same type.
+    /// - The allocation must be the most recent allocation made from this
+    ///   marker, even if other, more recent allocations have been released.
+    ///
+    /// Note that the `values` parameter is consumed as part of the allocation
+    /// process and cannot be returned on error.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::{Allocation, IntoSliceAllocation, Scratchpad};
+    ///
+    /// let scratchpad = Scratchpad::<[u32; 5], [usize; 1]>::static_new();
+    /// let marker = scratchpad.mark_front().unwrap();
+    ///
+    /// let a: Allocation<[f32]> = marker.allocate([3.14159f32, 2.71828f32])
+    ///     .unwrap()
+    ///     .into_slice_allocation();
+    ///
+    /// let ab = marker.append_copy(a, &[0.57722f32, 1.61803f32][..])
+    ///     .unwrap();
+    /// assert_eq!(*ab, [3.14159f32, 2.71828f32, 0.57722f32, 1.61803f32]);
+    /// ```
+    pub fn append_copy<'marker, T, U, IntoIteratorT, IteratorT, RefT>(
+        &'marker self,
+        allocation: Allocation<'marker, U>,
+        values: IntoIteratorT,
+    ) -> Result<Allocation<'marker, [T]>, Error<(Allocation<'marker, U>,)>>
+    where
+        T: Copy,
+        U: ?Sized,
+        Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
+        IntoIteratorT: IntoIterator<Item = RefT, IntoIter = IteratorT>,
+        IteratorT: ExactSizeIterator<Item = RefT>,
+        RefT: Borrow<T>,
+    {
+        // Verify that the allocation is at the end of the marker.
+        if !self.is_allocation_at_end(&allocation) {
+            return Err(Error::new(ErrorKind::NotAtEnd, (allocation,)));
+        }
+
+        // Create a new allocation for the value given and merge the two
+        // allocations. This will also perform all remaining validity checks.
+        let source = values.into_iter();
+        let source_len = source.len();
+        match unsafe { self.allocate_array_uninitialized(source_len) } {
+            Err(e) => Err(e.map(|()| (allocation,))),
+            Ok(mut val_alloc) => unsafe {
+                let mut index = 0;
+                for source_val in source {
+                    val_alloc[index] = *source_val.borrow();
+                    index += 1;
+                }
+
+                assert_eq!(index, source_len);
+                Ok(allocation.concat_unchecked::<T, [T]>(val_alloc))
+            },
+        }
+    }
+
+    /// Returns whether the allocation is the most recent allocation made from
+    /// this marker.
+    fn is_allocation_at_end<'marker, T, U>(
+        &'marker self,
+        allocation: &Allocation<'marker, U>,
+    ) -> bool
+    where
+        U: ?Sized,
+        Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
+    {
+        let data = unsafe {
+            &*IntoSliceAllocation::<'marker, T>::as_slice_ptr(allocation)
+        };
+        let data_len = data.len();
+        assert!(data_len <= ::core::isize::MAX as usize);
+
+        let data_start = data.as_ptr();
+        let data_end = unsafe { data_start.offset(data_len as isize) };
+
+        let buffer_start =
+            unsafe { (*self.scratchpad.buffer.get()).as_bytes().as_ptr() };
+        let marker_offset =
+            self.scratchpad.markers.borrow().data.get(self.index);
+        let marker_end =
+            unsafe { buffer_start.offset(marker_offset as isize) };
+
+        data_end as usize == marker_end as usize
     }
 }
 
@@ -1067,18 +1224,7 @@ where
         V: OwnedSlice<T>,
     {
         // Verify that the allocation is at the end of the marker.
-        let data_start = unsafe {
-            &*IntoSliceAllocation::<'marker, T>::as_slice_ptr(&allocation)
-        }.as_ptr();
-
-        let buffer_start =
-            unsafe { (*self.scratchpad.buffer.get()).as_bytes().as_ptr() };
-        let marker_offset =
-            self.scratchpad.markers.borrow().data.get(self.index);
-        let marker_end =
-            unsafe { buffer_start.offset(marker_offset as isize) };
-
-        if data_start as usize != marker_end as usize {
+        if !self.is_allocation_at_end(&allocation) {
             return Err(Error::new(ErrorKind::NotAtEnd, (allocation, values)));
         }
 
@@ -1094,6 +1240,174 @@ where
                 Ok(val_alloc.concat_unchecked::<T, U>(allocation))
             },
         }
+    }
+
+    /// Extends an allocation by cloning values onto its start, converting the
+    /// allocation to a slice if necessary.
+    ///
+    /// The following requirements must be met to allow elements to be
+    /// prepended:
+    ///
+    /// - The marker must be the most recently created back marker from its
+    ///   scratchpad.
+    /// - The allocation must contain a scalar, array, or slice of the type
+    ///   being pushed.
+    /// - The data being pushed must be a scalar, array, boxed slice, or
+    ///   vector of the same type.
+    /// - The allocation must be the most recent allocation made from this
+    ///   marker, even if other, more recent allocations have been released.
+    ///
+    /// Note that the `values` parameter is consumed as part of the allocation
+    /// process and cannot be returned on error.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::{Allocation, IntoSliceAllocation, Scratchpad};
+    ///
+    /// let scratchpad = Scratchpad::<[u32; 5], [usize; 1]>::static_new();
+    /// let marker = scratchpad.mark_back().unwrap();
+    ///
+    /// let a: Allocation<[f32]> = marker.allocate([3.14159f32, 2.71828f32])
+    ///     .unwrap()
+    ///     .into_slice_allocation();
+    ///
+    /// let ab = marker.prepend_clone(a, &[0.57722f32, 1.61803f32][..])
+    ///     .unwrap();
+    /// assert_eq!(*ab, [0.57722f32, 1.61803f32, 3.14159f32, 2.71828f32]);
+    /// ```
+    pub fn prepend_clone<'marker, T, U, IntoIteratorT, IteratorT, RefT>(
+        &'marker self,
+        allocation: Allocation<'marker, U>,
+        values: IntoIteratorT,
+    ) -> Result<Allocation<'marker, [T]>, Error<(Allocation<'marker, U>,)>>
+    where
+        T: Clone,
+        U: ?Sized,
+        Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
+        IntoIteratorT: IntoIterator<Item = RefT, IntoIter = IteratorT>,
+        IteratorT: ExactSizeIterator<Item = RefT>,
+        RefT: Borrow<T>,
+    {
+        // Verify that the allocation is at the end of the marker.
+        if !self.is_allocation_at_end(&allocation) {
+            return Err(Error::new(ErrorKind::NotAtEnd, (allocation,)));
+        }
+
+        // Create a new allocation for the value given and merge the two
+        // allocations. This will also perform all remaining validity checks.
+        let source = values.into_iter();
+        let source_len = source.len();
+        match unsafe { self.allocate_array_uninitialized(source_len) } {
+            Err(e) => Err(e.map(|()| (allocation,))),
+            Ok(mut val_alloc) => unsafe {
+                let mut index = 0;
+                for source_val in source {
+                    val_alloc[index] = source_val.borrow().clone();
+                    index += 1;
+                }
+
+                assert_eq!(index, source_len);
+
+                Ok(val_alloc.concat_unchecked::<T, U>(allocation))
+            },
+        }
+    }
+
+    /// Extends an allocation by copying values onto its start, converting the
+    /// allocation to a slice if necessary.
+    ///
+    /// The following requirements must be met to allow elements to be
+    /// prepended:
+    ///
+    /// - The marker must be the most recently created back marker from its
+    ///   scratchpad.
+    /// - The allocation must contain a scalar, array, or slice of the type
+    ///   being pushed.
+    /// - The data being pushed must be a scalar, array, boxed slice, or
+    ///   vector of the same type.
+    /// - The allocation must be the most recent allocation made from this
+    ///   marker, even if other, more recent allocations have been released.
+    ///
+    /// Note that the `values` parameter is consumed as part of the allocation
+    /// process and cannot be returned on error.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::{Allocation, IntoSliceAllocation, Scratchpad};
+    ///
+    /// let scratchpad = Scratchpad::<[u32; 5], [usize; 1]>::static_new();
+    /// let marker = scratchpad.mark_back().unwrap();
+    ///
+    /// let a: Allocation<[f32]> = marker.allocate([3.14159f32, 2.71828f32])
+    ///     .unwrap()
+    ///     .into_slice_allocation();
+    ///
+    /// let ab = marker.prepend_copy(a, &[0.57722f32, 1.61803f32][..])
+    ///     .unwrap();
+    /// assert_eq!(*ab, [0.57722f32, 1.61803f32, 3.14159f32, 2.71828f32]);
+    /// ```
+    pub fn prepend_copy<'marker, T, U, IntoIteratorT, IteratorT, RefT>(
+        &'marker self,
+        allocation: Allocation<'marker, U>,
+        values: IntoIteratorT,
+    ) -> Result<Allocation<'marker, [T]>, Error<(Allocation<'marker, U>,)>>
+    where
+        T: Copy,
+        U: ?Sized,
+        Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
+        IntoIteratorT: IntoIterator<Item = RefT, IntoIter = IteratorT>,
+        IteratorT: ExactSizeIterator<Item = RefT>,
+        RefT: Borrow<T>,
+    {
+        // Verify that the allocation is at the end of the marker.
+        if !self.is_allocation_at_end(&allocation) {
+            return Err(Error::new(ErrorKind::NotAtEnd, (allocation,)));
+        }
+
+        // Create a new allocation for the value given and merge the two
+        // allocations. This will also perform all remaining validity checks.
+        let source = values.into_iter();
+        let source_len = source.len();
+        match unsafe { self.allocate_array_uninitialized(source_len) } {
+            Err(e) => Err(e.map(|()| (allocation,))),
+            Ok(mut val_alloc) => unsafe {
+                let mut index = 0;
+                for source_val in source {
+                    val_alloc[index] = *source_val.borrow();
+                    index += 1;
+                }
+
+                assert_eq!(index, source_len);
+
+                Ok(val_alloc.concat_unchecked::<T, U>(allocation))
+            },
+        }
+    }
+
+    /// Returns whether the allocation is the most recent allocation made from
+    /// this marker.
+    fn is_allocation_at_end<'marker, T, U>(
+        &'marker self,
+        allocation: &Allocation<'marker, U>,
+    ) -> bool
+    where
+        U: ?Sized,
+        Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
+    {
+        let data_start = unsafe {
+            &*IntoSliceAllocation::<'marker, T>::as_slice_ptr(allocation)
+        }.as_ptr();
+
+        let buffer_start =
+            unsafe { (*self.scratchpad.buffer.get()).as_bytes().as_ptr() };
+        let marker_offset =
+            self.scratchpad.markers.borrow().data.get(self.index);
+        let marker_end =
+            unsafe { buffer_start.offset(marker_offset as isize) };
+
+        data_start as usize == marker_end as usize
     }
 }
 

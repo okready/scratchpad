@@ -64,7 +64,10 @@
 //!   given type into a single slice allocation.
 //! - **Allocation extension.** The [`MarkerFront::append()`] and
 //!   [`MarkerBack::prepend()`] methods allow for extending allocations at the
-//!   end of their respective stacks with new data.
+//!   end of their respective stacks with new data. Variants of these methods
+//!   also exist for cloning ([`append_clone()`], [`prepend_clone()`]) and
+//!   copying ([`append_copy()`], [`prepend_copy()`]) the source values
+//!   without moving them into an allocation.
 //! - **String concatenation.** The [`Marker::concat()`] method takes a
 //!   collection of strings and, if enough space is available, returns
 //!   an allocation containing a [`str`] slice with the concatenated result.
@@ -414,6 +417,8 @@
 //!
 //! [`Allocation`]: struct.Allocation.html
 //! [`Allocation::concat()`]: struct.Allocation.html#method.concat
+//! [`append_clone()`]: struct.MarkerFront.html#method.append_clone
+//! [`append_copy()`]: struct.MarkerFront.html#method.append_copy
 //! [`array_len_for_bytes!()`]: macro.array_len_for_bytes.html
 //! [`array_len_for_markers!()`]: macro.array_len_for_markers.html
 //! [`array_type_for_bytes!()`]: macro.array_type_for_bytes.html
@@ -433,6 +438,8 @@
 //! [`Marker::concat()`]: trait.Marker.html#method.concat
 //! [`MarkerBack::prepend()`]: struct.MarkerBack.html#method.prepend
 //! [`MarkerFront::append()`]: struct.MarkerFront.html#method.append
+//! [`prepend_clone()`]: struct.MarkerBack.html#method.prepend_clone
+//! [`prepend_copy()`]: struct.MarkerBack.html#method.prepend_copy
 //! [`Scratchpad`]: struct.Scratchpad.html
 //! [`Scratchpad::new()`]: struct.Scratchpad.html#method.new
 //! [`Scratchpad::static_new()`]: struct.Scratchpad.html#method.static_new
