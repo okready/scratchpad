@@ -12,7 +12,7 @@ use core::fmt;
 use core::ptr;
 use core::slice;
 
-use super::{AsMutSlice, Error, ErrorKind};
+use super::{Error, ErrorKind, IntoSliceAllocation};
 use core::marker::PhantomData;
 use core::mem::forget;
 use core::ops::{Deref, DerefMut};
@@ -170,21 +170,21 @@ where
         Error<(Allocation<'marker, T>, Allocation<'marker, U>)>,
     >
     where
-        T: AsMutSlice<V>,
-        U: AsMutSlice<V> + ?Sized,
-        V: Sized,
+        U: ?Sized,
+        Allocation<'marker, T>: IntoSliceAllocation<'marker, V>,
+        Allocation<'marker, U>: IntoSliceAllocation<'marker, V>,
     {
         unsafe {
-            let data0 = (&mut *self.data.as_ptr()).as_mut_slice();
-            let data1 = (&mut *other.data.as_ptr()).as_mut_slice();
+            let data0 = &*self.as_slice_ptr();
+            let data1 = &*other.as_slice_ptr();
             let data0_len = data0.len();
             let data1_len = data1.len();
             assert!(data0_len <= ::core::isize::MAX as usize);
             assert!(data1_len <= ::core::isize::MAX as usize);
 
-            let data0_start = data0.as_mut_ptr();
+            let data0_start = data0.as_ptr();
             let data0_end = data0_start.offset(data0_len as isize);
-            let data1_start = data1.as_mut_ptr();
+            let data1_start = data1.as_ptr();
             if data0_end != data1_start {
                 return Err(Error::new(
                     if data0_start < data1_start {
@@ -232,16 +232,16 @@ where
     /// [`concat()`]: #method.concat
     #[inline]
     pub unsafe fn concat_unchecked<V, U>(
-        self,
-        other: Allocation<'marker, U>,
+        mut self,
+        mut other: Allocation<'marker, U>,
     ) -> Allocation<'marker, [V]>
     where
-        T: AsMutSlice<V>,
-        U: AsMutSlice<V> + ?Sized,
-        V: Sized,
+        U: ?Sized,
+        Allocation<'marker, T>: IntoSliceAllocation<'marker, V>,
+        Allocation<'marker, U>: IntoSliceAllocation<'marker, V>,
     {
-        let data0 = (&mut *self.data.as_ptr()).as_mut_slice();
-        let data1 = (&mut *other.data.as_ptr()).as_mut_slice();
+        let data0 = &mut *self.as_mut_slice_ptr();
+        let data1 = &mut *other.as_mut_slice_ptr();
         let data0_len = data0.len();
         let data1_len = data1.len();
 

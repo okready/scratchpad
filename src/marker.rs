@@ -12,7 +12,8 @@ use core::ptr;
 use core::slice;
 
 use super::{
-    Allocation, AsMutSlice, Buffer, Error, ErrorKind, Scratchpad, Tracking,
+    Allocation, Buffer, Error, ErrorKind, IntoSliceAllocation, Scratchpad,
+    Tracking,
 };
 use core::marker::PhantomData;
 use core::mem::{align_of, size_of, transmute};
@@ -640,14 +641,15 @@ where
         value: T,
     ) -> Result<Allocation<'marker, [T]>, Error<(Allocation<'marker, U>, T)>>
     where
-        U: AsMutSlice<T> + ?Sized,
+        U: ?Sized,
+        Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
     {
         // Verify that the allocation is at the end of the marker.
-        let data = unsafe { (&mut *allocation.data.as_ptr()).as_mut_slice() };
+        let data = unsafe { &*allocation.as_slice_ptr() };
         let data_len = data.len();
         assert!(data_len <= ::core::isize::MAX as usize);
 
-        let data_start = data.as_mut_ptr();
+        let data_start = data.as_ptr();
         let data_end = unsafe { data_start.offset(data_len as isize) };
 
         let buffer_start =
@@ -663,10 +665,10 @@ where
 
         // Create a new allocation for the value given and merge the two
         // allocations. This will also perform all remaining validity checks.
-        match self.allocate(value) {
+        match self.allocate::<T>(value) {
             Err(e) => Err(e.map(|(val,)| (allocation, val))),
             Ok(val_alloc) => unsafe {
-                Ok(allocation.concat_unchecked(val_alloc))
+                Ok(allocation.concat_unchecked::<T, T>(val_alloc))
             },
         }
     }
@@ -1031,15 +1033,15 @@ where
     /// ```
     pub fn push_front<'marker, T, U>(
         &'marker self,
-        mut allocation: Allocation<'marker, U>,
+        allocation: Allocation<'marker, U>,
         value: T,
     ) -> Result<Allocation<'marker, [T]>, Error<(Allocation<'marker, U>, T)>>
     where
-        U: AsMutSlice<T> + ?Sized,
+        U: ?Sized,
+        Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
     {
         // Verify that the allocation is at the end of the marker.
-        let data_start =
-            unsafe { allocation.data.as_mut().as_mut_slice().as_mut_ptr() };
+        let data_start = unsafe { &*allocation.as_slice_ptr() }.as_ptr();
 
         let buffer_start =
             unsafe { (*self.scratchpad.buffer.get()).as_bytes().as_ptr() };
@@ -1054,10 +1056,10 @@ where
 
         // Create a new allocation for the value given and merge the two
         // allocations. This will also perform all remaining validity checks.
-        match self.allocate(value) {
+        match self.allocate::<T>(value) {
             Err(e) => Err(e.map(|(val,)| (allocation, val))),
             Ok(val_alloc) => unsafe {
-                Ok(val_alloc.concat_unchecked(allocation))
+                Ok(val_alloc.concat_unchecked::<T, U>(allocation))
             },
         }
     }

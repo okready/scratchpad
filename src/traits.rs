@@ -10,8 +10,10 @@
 
 use core::slice;
 
-use super::CacheAligned;
-use core::mem::size_of;
+use super::{Allocation, CacheAligned};
+use core::marker::PhantomData;
+use core::mem::{forget, size_of};
+use core::ptr::NonNull;
 
 #[cfg(any(feature = "std", feature = "unstable"))]
 use super::Box;
@@ -203,27 +205,197 @@ where
     }
 }
 
-/// Trait for converting mutable references to slices (used by [`Allocation`]
-/// concatenation).
+/// Trait for safely converting an [`Allocation`] of a given type into an
+/// [`Allocation<[T]>`][`Allocation`] without losing or altering any of the
+/// allocation data.
+///
+/// # Safety
+///
+/// Implementing this trait implies that a type can be safely consumed when
+/// converting into a slice allocation. Implementing it for other types can
+/// cause various undefined behavior or crashing.
 ///
 /// [`Allocation`]: struct.Allocation.html
-pub trait AsMutSlice<T> {
-    /// Converts the given mutable reference to a slice reference of the
-    /// target type (if it is not already one).
-    fn as_mut_slice(&mut self) -> &mut [T];
-}
+pub unsafe trait IntoSliceAllocation<'marker, T>: Sized
+where
+    T: Sized,
+{
+    /// Converts this allocation into a slice allocation without altering the
+    /// allocation data.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::{Allocation, IntoSliceAllocation, Scratchpad};
+    ///
+    /// let scratchpad = Scratchpad::<[i32; 6], [usize; 1]>::static_new();
+    /// let marker = scratchpad.mark_front().unwrap();
+    ///
+    /// let scalar = marker.allocate(3).unwrap();
+    /// assert_eq!(*scalar.into_slice_allocation(), [3]);
+    ///
+    /// let slice = marker.allocate_array_with(2, |index| index as i32)
+    ///     .unwrap();
+    /// assert_eq!(*slice.into_slice_allocation(), [0, 1]);
+    ///
+    /// // Automatic conversion of an array into a slice is ambiguous, as the
+    /// // compiler can't tell whether we want a slice with the same length as
+    /// // the array or a slice with only one element containing the entire
+    /// // array. We must explicitly specify the slice type in this example.
+    /// let array = marker.allocate([9, 8, 7]).unwrap();
+    /// let array_slice: Allocation<'_, [i32]> =
+    ///     array.into_slice_allocation();
+    /// assert_eq!(*array_slice, [9, 8, 7]);
+    /// ```
+    #[inline]
+    fn into_slice_allocation(mut self) -> Allocation<'marker, [T]> {
+        unsafe {
+            let slice_ptr = self.as_mut_slice_ptr();
+            let ptr = (*slice_ptr).as_mut_ptr();
+            let len = (*slice_ptr).len();
+            forget(self);
 
-impl<T> AsMutSlice<T> for [T] {
+            Allocation {
+                data: NonNull::new(slice::from_raw_parts_mut(ptr, len))
+                    .unwrap(),
+                _phantom: PhantomData,
+            }
+        }
+    }
+
+    /// Returns a reference to a slice of this allocation's data without
+    /// altering the allocation.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::{Allocation, IntoSliceAllocation, Scratchpad};
+    ///
+    /// let scratchpad = Scratchpad::<[i32; 6], [usize; 1]>::static_new();
+    /// let marker = scratchpad.mark_front().unwrap();
+    ///
+    /// let scalar = marker.allocate(3).unwrap();
+    /// assert_eq!(*scalar.as_slice(), [3]);
+    /// assert_eq!(*scalar, 3);
+    ///
+    /// let slice = marker.allocate_array_with(2, |index| index as i32)
+    ///     .unwrap();
+    /// assert_eq!(*slice.as_slice(), [0, 1]);
+    /// assert_eq!(*slice, [0, 1]);
+    ///
+    /// // Automatic conversion of an array into a slice is ambiguous, as the
+    /// // compiler can't tell whether we want a slice with the same length as
+    /// // the array or a slice with only one element containing the entire
+    /// // array. We must explicitly specify the slice type in this example.
+    /// let array = marker.allocate([9, 8, 7]).unwrap();
+    /// let array_slice: &[i32] = array.as_slice();
+    /// assert_eq!(*array_slice, [9, 8, 7]);
+    /// assert_eq!(*array, [9, 8, 7]);
+    /// ```
+    #[inline]
+    fn as_slice(&self) -> &[T] {
+        unsafe { &*self.as_slice_ptr() }
+    }
+
+    /// Returns a mutable reference to a slice of this allocation's data
+    /// without altering the allocation.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::{Allocation, IntoSliceAllocation, Scratchpad};
+    ///
+    /// let scratchpad = Scratchpad::<[i32; 3], [usize; 1]>::static_new();
+    /// let marker = scratchpad.mark_front().unwrap();
+    ///
+    /// let mut array = marker.allocate([9, 8, 7]).unwrap();
+    ///
+    /// // Restrict scope of the mutable borrow performed by `as_mut_slice()`.
+    /// {
+    ///     let array_slice: &mut [i32] = array.as_mut_slice();
+    ///     array_slice[1] = 4;
+    /// }
+    ///
+    /// assert_eq!(*array, [9, 4, 7]);
+    /// ```
     #[inline]
     fn as_mut_slice(&mut self) -> &mut [T] {
-        self
+        unsafe { &mut *self.as_mut_slice_ptr() }
+    }
+
+    /// Returns a pointer to a slice of this allocation's data without
+    /// altering the allocation.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::{Allocation, IntoSliceAllocation, Scratchpad};
+    ///
+    /// let scratchpad = Scratchpad::<[i32; 3], [usize; 1]>::static_new();
+    /// let marker = scratchpad.mark_front().unwrap();
+    ///
+    /// let array = marker.allocate([9, 8, 7]).unwrap();
+    /// let array_slice: *const [i32] = array.as_slice_ptr();
+    /// assert_eq!(*unsafe { &*array_slice }, [9, 8, 7]);
+    /// ```
+    fn as_slice_ptr(&self) -> *const [T];
+
+    /// Returns a mutable pointer to a slice of this allocation's data without
+    /// altering the allocation.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::{Allocation, IntoSliceAllocation, Scratchpad};
+    ///
+    /// let scratchpad = Scratchpad::<[i32; 3], [usize; 1]>::static_new();
+    /// let marker = scratchpad.mark_front().unwrap();
+    ///
+    /// let mut array = marker.allocate([9, 8, 7]).unwrap();
+    ///
+    /// // Restrict scope of the mutable borrow performed by
+    /// // `as_mut_slice_ptr()`.
+    /// {
+    ///     let array_slice: *mut [i32] = array.as_mut_slice_ptr();
+    ///     unsafe {
+    ///         (*array_slice)[1] = 4;
+    ///     }
+    /// }
+    ///
+    /// assert_eq!(*array, [9, 4, 7]);
+    /// ```
+    fn as_mut_slice_ptr(&mut self) -> *mut [T];
+}
+
+unsafe impl<'marker, T> IntoSliceAllocation<'marker, T>
+    for Allocation<'marker, [T]>
+where
+    T: Sized,
+{
+    #[inline]
+    fn as_slice_ptr(&self) -> *const [T] {
+        self.data.as_ptr()
+    }
+
+    #[inline]
+    fn as_mut_slice_ptr(&mut self) -> *mut [T] {
+        self.data.as_ptr()
     }
 }
 
-impl<T> AsMutSlice<T> for T {
+unsafe impl<'marker, T> IntoSliceAllocation<'marker, T>
+    for Allocation<'marker, T>
+where
+    T: Sized,
+{
     #[inline]
-    fn as_mut_slice(&mut self) -> &mut [T] {
-        unsafe { slice::from_raw_parts_mut(self, 1) }
+    fn as_slice_ptr(&self) -> *const [T] {
+        unsafe { slice::from_raw_parts(self.data.as_ptr(), 1) }
+    }
+
+    #[inline]
+    fn as_mut_slice_ptr(&mut self) -> *mut [T] {
+        unsafe { slice::from_raw_parts_mut(self.data.as_ptr(), 1) }
     }
 }
 
@@ -258,10 +430,19 @@ macro_rules! generate_array_trait_impls {
             T: ByteData,
         {}
 
-        impl<T> AsMutSlice<T> for [T; $size] {
+        unsafe impl<'marker, T> IntoSliceAllocation<'marker, T>
+            for Allocation<'marker, [T; $size]>
+        where
+            T: Sized,
+        {
             #[inline]
-            fn as_mut_slice(&mut self) -> &mut [T] {
-                &mut self[..]
+            fn as_slice_ptr(&self) -> *const [T] {
+                unsafe { &(*self.data.as_ref())[..] }
+            }
+
+            #[inline]
+            fn as_mut_slice_ptr(&mut self) -> *mut [T] {
+                unsafe { &mut (*self.data.as_mut())[..] }
             }
         }
     };
