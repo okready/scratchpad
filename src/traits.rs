@@ -16,7 +16,9 @@ use core::mem::{forget, size_of};
 use core::ptr::NonNull;
 
 #[cfg(any(feature = "std", feature = "unstable"))]
-use super::Box;
+use super::{Box, Vec};
+#[cfg(any(feature = "std", feature = "unstable"))]
+use core::mem::ManuallyDrop;
 
 /// Trait for types that can be safely used as the backing data type for
 /// storage of arbitrary data.
@@ -399,6 +401,107 @@ where
     }
 }
 
+/// Trait for types containing ranges of values that can be safely moved out
+/// while consuming the original container type.
+pub trait OwnedSlice<T>: Sized
+where
+    T: Sized,
+{
+    /// Returns the owned values as a slice reference.
+    #[inline]
+    fn as_slice(&self) -> &[T] {
+        unsafe { &*self.as_slice_ptr() }
+    }
+
+    /// Returns the owned values as a slice pointer.
+    ///
+    /// Functions such as [`MarkerFront::append()`] and
+    /// [`MarkerBack::prepend()`] will perform a bitwise-copy of the data
+    /// returned by this function into their allocations before calling
+    /// [`drop_container()`]. Implementations only need to return the data
+    /// that should be read for moving.
+    ///
+    /// [`drop_container()`]: #method.drop_container
+    /// [`MarkerBack::prepend()`]: struct.MarkerBack.html#method.prepend
+    /// [`MarkerFront::append()`]: struct.MarkerFront.html#method.append
+    fn as_slice_ptr(&self) -> *const [T];
+
+    /// Consumes the container type without dropping the contained elements
+    /// themselves.
+    ///
+    /// This is called after functions such as [`MarkerFront::append()`] and
+    /// [`MarkerBack::prepend()`] have already moved values into their own
+    /// allocations. The container type should free any allocated memory or
+    /// other resources, including any memory allocated for storage of the
+    /// contained values, without calling the [`Drop`] implementation of those
+    /// values.
+    ///
+    /// [`MarkerBack::prepend()`]: struct.MarkerBack.html#method.prepend
+    /// [`MarkerFront::append()`]: struct.MarkerFront.html#method.append
+    /// [`Drop`]: https://doc.rust-lang.org/std/ops/trait.Drop.html
+    fn drop_container(container: Self);
+}
+
+impl<T> OwnedSlice<T> for T {
+    #[inline]
+    fn as_slice_ptr(&self) -> *const [T] {
+        unsafe { slice::from_raw_parts(self, 1) }
+    }
+
+    #[inline]
+    fn drop_container(container: Self) {
+        forget(container);
+    }
+}
+
+#[cfg(any(feature = "std", feature = "unstable"))]
+impl<T> OwnedSlice<T> for Box<T> {
+    #[inline]
+    fn as_slice_ptr(&self) -> *const [T] {
+        unsafe { slice::from_raw_parts(&**self, 1) }
+    }
+
+    #[inline]
+    fn drop_container(container: Self) {
+        unsafe {
+            Box::from_raw(Box::into_raw(container) as *mut ManuallyDrop<T>);
+        }
+    }
+}
+
+#[cfg(any(feature = "std", feature = "unstable"))]
+impl<T> OwnedSlice<T> for Box<[T]> {
+    #[inline]
+    fn as_slice_ptr(&self) -> *const [T] {
+        &**self
+    }
+
+    #[inline]
+    fn drop_container(container: Self) {
+        unsafe {
+            Box::from_raw(Box::into_raw(container) as *mut [ManuallyDrop<T>]);
+        }
+    }
+}
+
+#[cfg(any(feature = "std", feature = "unstable"))]
+impl<T> OwnedSlice<T> for Vec<T> {
+    #[inline]
+    fn as_slice_ptr(&self) -> *const [T] {
+        &**self
+    }
+
+    #[inline]
+    fn drop_container(mut container: Self) {
+        let ptr = container.as_mut_ptr();
+        let len = container.len();
+        let capacity = container.capacity();
+        unsafe {
+            Vec::from_raw_parts(ptr as *mut ManuallyDrop<T>, len, capacity);
+        }
+    }
+}
+
 /// Macro for generating trait implementations for static arrays.
 macro_rules! generate_array_trait_impls {
     ($size:expr) => {
@@ -443,6 +546,36 @@ macro_rules! generate_array_trait_impls {
             #[inline]
             fn as_mut_slice_ptr(&mut self) -> *mut [T] {
                 unsafe { &mut (*self.data.as_mut())[..] }
+            }
+        }
+
+        impl<T> OwnedSlice<T> for [T; $size] {
+            #[inline]
+            fn as_slice_ptr(&self) -> *const [T] {
+                &self[..]
+            }
+
+            #[inline]
+            fn drop_container(container: Self) {
+                forget(container);
+            }
+        }
+
+        #[cfg(any(feature = "std", feature = "unstable"))]
+        impl<T> OwnedSlice<T> for Box<[T; $size]> {
+            #[inline]
+            fn as_slice_ptr(&self) -> *const [T] {
+                &self[..]
+            }
+
+            #[inline]
+            fn drop_container(container: Self) {
+                unsafe {
+                    Box::from_raw(
+                        Box::into_raw(container)
+                            as *mut ManuallyDrop<[T; $size]>,
+                    );
+                }
             }
         }
     };

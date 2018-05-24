@@ -8,12 +8,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Added
 - `Allocation::concat()` and `Allocation::concat_unchecked()` for
   concatenating two adjacent allocations into a single slice allocation.
-- `MarkerFront::push_back()` and `MarkerBack::push_front()` for extending
-  existing allocations at the end of their respective stacks with new data.
+- `MarkerFront::append()` and `MarkerBack::prepend()` for extending existing
+  allocations at the end of their respective stacks with new data.
 - `IntoSliceAllocation` trait for safely coercing `Allocation` instances into
   allocations of slices. This is also used to determine what types can be used
   for allocation concatenation (`concat()` and `concat_unchecked()` allocation
-  methods) and extension (`push_back()` and `push_front()` marker methods).
+  methods) and extension (`append()` and `prepend()` marker methods).
 - ZST allocation unit test.
 
 ### Changed
