@@ -15,6 +15,7 @@ use super::{Allocation, AsMutSlice, Buffer, Error, ErrorKind, Scratchpad,
             Tracking};
 use core::marker::PhantomData;
 use core::mem::{align_of, size_of, transmute};
+use core::ptr::NonNull;
 
 /// [`Scratchpad`] allocation marker implementation trait.
 ///
@@ -46,7 +47,7 @@ pub trait Marker {
         unsafe {
             match self.allocate_uninitialized::<T>() {
                 Ok(allocation) => {
-                    ptr::write(allocation.data, value);
+                    ptr::write(allocation.data.as_ptr(), value);
                     Ok(allocation)
                 }
                 Err(e) => Err(e.map(|_| (value,))),
@@ -103,7 +104,7 @@ pub trait Marker {
         let data = self.allocate_memory(align_of::<T>(), size_of::<T>(), 1)?;
 
         Ok(Allocation {
-            data: data as *mut T,
+            data: NonNull::new(data as *mut T).unwrap(),
             _phantom: PhantomData,
         })
     }
@@ -131,7 +132,7 @@ pub trait Marker {
         unsafe {
             self.allocate_array_uninitialized(len)
                 .map(|allocation| {
-                    let data = &mut *allocation.data;
+                    let data = &mut *allocation.data.as_ptr();
                     debug_assert_eq!(data.len(), len);
                     for element in data.iter_mut() {
                         ptr::write(element, value.clone());
@@ -162,15 +163,14 @@ pub trait Marker {
         len: usize,
     ) -> Result<Allocation<'marker, [T]>, Error<()>> {
         unsafe {
-            self.allocate_array_uninitialized(len)
-                .map(|allocation| {
-                    let data = &mut *allocation.data;
-                    debug_assert_eq!(data.len(), len);
-                    for element in data.iter_mut() {
-                        ptr::write(element, Default::default());
-                    }
-                    allocation
-                })
+            self.allocate_array_uninitialized(len).map(|allocation| {
+                let data = &mut *allocation.data.as_ptr();
+                debug_assert_eq!(data.len(), len);
+                for element in data.iter_mut() {
+                    ptr::write(element, Default::default());
+                }
+                allocation
+            })
         }
     }
 
@@ -198,15 +198,14 @@ pub trait Marker {
         mut func: F,
     ) -> Result<Allocation<'marker, [T]>, Error<()>> {
         unsafe {
-            self.allocate_array_uninitialized(len)
-                .map(|allocation| {
-                    let data = &mut *allocation.data;
-                    debug_assert_eq!(data.len(), len);
-                    for (index, element) in data.iter_mut().enumerate() {
-                        ptr::write(element, func(index));
-                    }
-                    allocation
-                })
+            self.allocate_array_uninitialized(len).map(|allocation| {
+                let data = &mut *allocation.data.as_ptr();
+                debug_assert_eq!(data.len(), len);
+                for (index, element) in data.iter_mut().enumerate() {
+                    ptr::write(element, func(index));
+                }
+                allocation
+            })
         }
     }
 
@@ -244,7 +243,10 @@ pub trait Marker {
             self.allocate_memory(align_of::<T>(), size_of::<T>(), len)?;
 
         Ok(Allocation {
-            data: slice::from_raw_parts_mut(data as *mut T, len),
+            data: NonNull::new(slice::from_raw_parts_mut(
+                data as *mut T,
+                len,
+            )).unwrap(),
             _phantom: PhantomData,
         })
     }
@@ -640,7 +642,7 @@ where
         U: AsMutSlice<T> + ?Sized,
     {
         // Verify that the allocation is at the end of the marker.
-        let data = unsafe { (&mut *allocation.data).as_mut_slice() };
+        let data = unsafe { (&mut *allocation.data.as_ptr()).as_mut_slice() };
         let data_len = data.len();
         assert!(data_len <= ::core::isize::MAX as usize);
 
@@ -1039,18 +1041,15 @@ where
     /// ```
     pub fn push_front<'marker, T, U>(
         &'marker self,
-        allocation: Allocation<'marker, U>,
+        mut allocation: Allocation<'marker, U>,
         value: T,
     ) -> Result<Allocation<'marker, [T]>, Error<(Allocation<'marker, U>, T)>>
     where
         U: AsMutSlice<T> + ?Sized,
     {
         // Verify that the allocation is at the end of the marker.
-        let data_start = unsafe {
-            (&mut *allocation.data)
-                .as_mut_slice()
-                .as_mut_ptr()
-        };
+        let data_start =
+            unsafe { allocation.data.as_mut().as_mut_slice().as_mut_ptr() };
 
         let buffer_start = unsafe {
             (*self.scratchpad.buffer.get())

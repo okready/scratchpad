@@ -38,8 +38,8 @@ extern crate scratchpad;
 
 ## Rust Version Support
 
-The minimum supported Rust version is 1.25 due to use of the `repr(align)`
-attribute.
+The minimum supported Rust version is 1.25 due to use of `NonNull<T>` and the
+`repr(align)` attribute.
 
 ## `no_std` Support
 

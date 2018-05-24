@@ -16,6 +16,7 @@ use super::{AsMutSlice, Error, ErrorKind};
 use core::marker::PhantomData;
 use core::mem::forget;
 use core::ops::{Deref, DerefMut};
+use core::ptr::NonNull;
 
 /// Scratchpad [`Marker`] allocation.
 ///
@@ -35,7 +36,7 @@ where
     T: ?Sized,
 {
     /// Allocation data.
-    pub(crate) data: *mut T,
+    pub(crate) data: NonNull<T>,
     /// Dummy reference for ensuring the allocation does not outlive the
     /// `Marker` from which it was allocated.
     pub(crate) _phantom: PhantomData<&'marker ()>,
@@ -73,7 +74,7 @@ where
     /// [`Sized`]: https://doc.rust-lang.org/core/marker/trait.Sized.html
     pub fn unwrap(self) -> T {
         unsafe {
-            let value = ptr::read(self.data);
+            let value = ptr::read(self.data.as_ptr());
             forget(self);
             value
         }
@@ -177,8 +178,8 @@ where
         V: Sized,
     {
         unsafe {
-            let data0 = (&mut *self.data).as_mut_slice();
-            let data1 = (&mut *other.data).as_mut_slice();
+            let data0 = (&mut *self.data.as_ptr()).as_mut_slice();
+            let data1 = (&mut *other.data.as_ptr()).as_mut_slice();
             let data0_len = data0.len();
             let data1_len = data1.len();
             assert!(data0_len <= ::core::isize::MAX as usize);
@@ -202,10 +203,10 @@ where
             forget(other);
 
             Ok(Allocation {
-                data: slice::from_raw_parts_mut(
+                data: NonNull::new(slice::from_raw_parts_mut(
                     data0_start,
                     data0_len + data1_len,
-                ),
+                )).unwrap(),
                 _phantom: PhantomData,
             })
         }
@@ -220,7 +221,7 @@ where
 
     #[inline]
     fn deref(&self) -> &T {
-        unsafe { &*self.data }
+        unsafe { self.data.as_ref() }
     }
 }
 
@@ -230,7 +231,7 @@ where
 {
     #[inline]
     fn deref_mut(&mut self) -> &mut T {
-        unsafe { &mut *self.data }
+        unsafe { self.data.as_mut() }
     }
 }
 
@@ -240,7 +241,7 @@ where
 {
     #[inline]
     fn drop(&mut self) {
-        unsafe { ptr::drop_in_place(self.data) };
+        unsafe { ptr::drop_in_place(self.data.as_ptr()) };
     }
 }
 
@@ -250,6 +251,8 @@ where
 {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        unsafe { write!(f, "Allocation {{ data: {:?} }}", &*self.data) }
+        unsafe {
+            write!(f, "Allocation {{ data: {:?} }}", self.data.as_ref())
+        }
     }
 }
