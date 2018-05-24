@@ -11,8 +11,9 @@
 use core::ptr;
 use core::slice;
 
-use super::{Allocation, AsMutSlice, Buffer, Error, ErrorKind, Scratchpad,
-            Tracking};
+use super::{
+    Allocation, AsMutSlice, Buffer, Error, ErrorKind, Scratchpad, Tracking,
+};
 use core::marker::PhantomData;
 use core::mem::{align_of, size_of, transmute};
 use core::ptr::NonNull;
@@ -72,8 +73,7 @@ pub trait Marker {
     fn allocate_default<'marker, T: Default>(
         &'marker self,
     ) -> Result<Allocation<'marker, T>, Error<()>> {
-        self.allocate(Default::default())
-            .map_err(|e| e.map(|_| ()))
+        self.allocate(Default::default()).map_err(|e| e.map(|_| ()))
     }
 
     /// Allocates uninitialized space for the given type.
@@ -275,9 +275,9 @@ pub trait Marker {
         StrT: AsRef<str>,
     {
         let iter = strings.into_iter();
-        let size = iter.clone().fold(0usize, |sum, item| {
-            sum + item.as_ref().as_bytes().len()
-        });
+        let size = iter
+            .clone()
+            .fold(0usize, |sum, item| sum + item.as_ref().as_bytes().len());
         let mut result =
             unsafe { self.allocate_array_uninitialized::<u8>(size)? };
 
@@ -364,7 +364,8 @@ where
         debug_assert_eq!(alignment & alignment_mask, 0);
 
         // Pad the allocation size to match the requested alignment.
-        let size = size.checked_add(alignment_mask)
+        let size = size
+            .checked_add(alignment_mask)
             .ok_or_else(|| Error::new(ErrorKind::Overflow, ()))?
             & !alignment_mask;
         let size = size * len;
@@ -649,24 +650,15 @@ where
         let data_start = data.as_mut_ptr();
         let data_end = unsafe { data_start.offset(data_len as isize) };
 
-        let buffer_start = unsafe {
-            (*self.scratchpad.buffer.get())
-                .as_bytes()
-                .as_ptr()
-        };
-        let marker_offset = self.scratchpad
-            .markers
-            .borrow()
-            .data
-            .get(self.index);
+        let buffer_start =
+            unsafe { (*self.scratchpad.buffer.get()).as_bytes().as_ptr() };
+        let marker_offset =
+            self.scratchpad.markers.borrow().data.get(self.index);
         let marker_end =
             unsafe { buffer_start.offset(marker_offset as isize) };
 
         if data_end as usize != marker_end as usize {
-            return Err(Error::new(
-                ErrorKind::NotAtEnd,
-                (allocation, value),
-            ));
+            return Err(Error::new(ErrorKind::NotAtEnd, (allocation, value)));
         }
 
         // Create a new allocation for the value given and merge the two
@@ -772,7 +764,8 @@ where
         debug_assert_eq!(alignment & alignment_mask, 0);
 
         // Pad the allocation size to match the requested alignment.
-        let size = size.checked_add(alignment_mask)
+        let size = size
+            .checked_add(alignment_mask)
             .ok_or_else(|| Error::new(ErrorKind::Overflow, ()))?
             & !alignment_mask;
         let size = size * len;
@@ -800,9 +793,7 @@ where
         }
 
         // Update this marker's offset and return the allocation.
-        markers
-            .data
-            .set(self.index, start - buffer_start);
+        markers.data.set(self.index, start - buffer_start);
 
         Ok(start as *mut u8)
     }
@@ -1051,24 +1042,15 @@ where
         let data_start =
             unsafe { allocation.data.as_mut().as_mut_slice().as_mut_ptr() };
 
-        let buffer_start = unsafe {
-            (*self.scratchpad.buffer.get())
-                .as_bytes()
-                .as_ptr()
-        };
-        let marker_offset = self.scratchpad
-            .markers
-            .borrow()
-            .data
-            .get(self.index);
+        let buffer_start =
+            unsafe { (*self.scratchpad.buffer.get()).as_bytes().as_ptr() };
+        let marker_offset =
+            self.scratchpad.markers.borrow().data.get(self.index);
         let marker_end =
             unsafe { buffer_start.offset(marker_offset as isize) };
 
         if data_start as usize != marker_end as usize {
-            return Err(Error::new(
-                ErrorKind::NotAtEnd,
-                (allocation, value),
-            ));
+            return Err(Error::new(ErrorKind::NotAtEnd, (allocation, value)));
         }
 
         // Create a new allocation for the value given and merge the two

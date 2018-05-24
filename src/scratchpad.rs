@@ -10,8 +10,9 @@
 
 use core::fmt;
 
-use super::{Buffer, Error, ErrorKind, MarkerBack, MarkerFront, StaticBuffer,
-            Tracking};
+use super::{
+    Buffer, Error, ErrorKind, MarkerBack, MarkerFront, StaticBuffer, Tracking,
+};
 use core::cell::{RefCell, UnsafeCell};
 use core::mem::{size_of, uninitialized};
 
