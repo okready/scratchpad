@@ -10,7 +10,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   concatenating two adjacent allocations into a single slice allocation.
 - `MarkerFront::append{,_clone,_copy}()` and
   `MarkerBack::prepend{,_clone,_copy}()` for extending existing allocations at
-  the end of their respective stacks with new data.
+  the end of their respective stacks with new data. This functionality is also
+  available through the `Marker` trait using the `extend{,_clone,_copy}()`
+  methods (appending is always performed by front markers, and prepending is
+  always performed by back markers).
 - `IntoSliceAllocation` trait for safely coercing `Allocation` instances into
   allocations of slices. This is also used to determine what types can be used
   for allocation concatenation (`concat()` and `concat_unchecked()` allocation
