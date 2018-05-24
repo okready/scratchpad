@@ -506,6 +506,7 @@ impl<T> OwnedSlice<T> for Vec<T> {
         let ptr = container.as_mut_ptr();
         let len = container.len();
         let capacity = container.capacity();
+        forget(container);
         unsafe {
             Vec::from_raw_parts(ptr as *mut ManuallyDrop<T>, len, capacity);
         }
