@@ -735,7 +735,10 @@ where
             Ok(mut val_alloc) => unsafe {
                 let mut index = 0;
                 for source_val in source {
-                    val_alloc[index] = source_val.borrow().clone();
+                    ptr::write(
+                        &mut val_alloc[index],
+                        source_val.borrow().clone(),
+                    );
                     index += 1;
                 }
 
@@ -807,7 +810,7 @@ where
             Ok(mut val_alloc) => unsafe {
                 let mut index = 0;
                 for source_val in source {
-                    val_alloc[index] = *source_val.borrow();
+                    ptr::write(&mut val_alloc[index], *source_val.borrow());
                     index += 1;
                 }
 
@@ -1303,7 +1306,10 @@ where
             Ok(mut val_alloc) => unsafe {
                 let mut index = 0;
                 for source_val in source {
-                    val_alloc[index] = source_val.borrow().clone();
+                    ptr::write(
+                        &mut val_alloc[index],
+                        source_val.borrow().clone(),
+                    );
                     index += 1;
                 }
 
@@ -1375,7 +1381,7 @@ where
             Ok(mut val_alloc) => unsafe {
                 let mut index = 0;
                 for source_val in source {
-                    val_alloc[index] = *source_val.borrow();
+                    ptr::write(&mut val_alloc[index], *source_val.borrow());
                     index += 1;
                 }
 
