@@ -18,7 +18,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   allocations of slices. This is also used to determine what types can be used
   for allocation concatenation (`concat()` and `concat_unchecked()` allocation
   methods) and extension (`append*()` and `prepend*()` marker methods).
-- ZST allocation unit test.
+- Various unit tests for edge cases (e.g. allocation extension safety, ZST
+  allocation support).
 
 ### Changed
 - Replaced the simple `Error` enum with an `Error` struct that provides the

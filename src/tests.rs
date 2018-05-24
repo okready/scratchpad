@@ -10,7 +10,32 @@ use core::fmt;
 
 use super::*;
 use arrayvec::ArrayVec;
+use core::cell::Cell;
 use core::mem::{align_of, uninitialized};
+
+#[cfg(any(feature = "std", feature = "unstable"))]
+use super::{Box, Vec};
+
+// Struct that increments a counter each time it is dropped (used for testing
+// for accidental drops due to incorrect moving of values in unsafe code).
+#[derive(Clone, Debug)]
+struct DropCounter<'a> {
+    count: &'a Cell<usize>,
+}
+
+impl<'a> DropCounter<'a> {
+    #[inline]
+    fn new(count: &'a Cell<usize>) -> Self {
+        Self { count }
+    }
+}
+
+impl<'a> Drop for DropCounter<'a> {
+    #[inline]
+    fn drop(&mut self) {
+        self.count.set(self.count.get() + 1);
+    }
+}
 
 // Trait for accessing the internals of `Marker` structs.
 trait MarkerInternal: Marker {
@@ -443,56 +468,202 @@ fn validate_back_marker_limits() {
     );
 }
 
-/// Verifies `Allocation::unwrap()` works properly.
+/// Verifies `Allocation::unwrap()` doesn't accidentally drop or leak data.
 #[test]
-fn allocation_drop_test() {
-    #[derive(Debug)]
-    struct DropTest<'a> {
-        is_active: &'a mut bool,
-    }
-
-    impl<'a> DropTest<'a> {
-        fn check(&self) {
-            assert!(*self.is_active);
-        }
-    }
-
-    impl<'a> Drop for DropTest<'a> {
-        fn drop(&mut self) {
-            assert!(*self.is_active);
-            *self.is_active = false;
-        }
-    }
-
-    let mut is_active = true;
+fn allocation_unwrap_test() {
+    let drop_count = Cell::new(0);
 
     {
-        let data = {
-            let scratchpad = Scratchpad::new([0usize; 1], [0usize; 1]);
+        let _data = {
+            let scratchpad =
+                Scratchpad::<[usize; 1], [usize; 1]>::static_new();
             let marker = scratchpad.mark_front().unwrap();
 
-            // Create an instance of `DropTest` within the scratchpad. The
-            // `is_active` flag should remain `true`.
-            let allocation = marker
-                .allocate(DropTest {
-                    is_active: &mut is_active,
-                })
-                .unwrap();
-            allocation.check();
+            // Create an instance of `DropCounter` within the scratchpad. The
+            // `drop_count` should remain at zero.
+            let allocation =
+                marker.allocate(DropCounter::new(&drop_count)).unwrap();
+            assert_eq!(drop_count.get(), 0);
 
-            // Move the `DropTest` instance out of the allocation, and ensure
-            // the scratchpad is completely destroyed as it goes out of scope.
+            // Move the `DropCounter` instance out of the allocation, and
+            // ensure the scratchpad is completely destroyed as it goes out of
+            // scope.
             allocation.unwrap()
         };
 
-        // `drop()` should not be called yet, so the `is_active` flag should
-        // still remain `true`.
-        data.check();
+        // `drop()` should not be called yet, so `drop_count` should still be
+        // zero.
+        assert_eq!(drop_count.get(), 0);
     }
 
-    // The `DropTest` instance is now out of scope, so it`s `drop()` method
-    // should have set the `is_active` flag to `false`.
-    assert!(!is_active);
+    // The `DropCounter` instance is now out of scope, so it`s `drop()` method
+    // should have incremented `drop_count`.
+    assert_eq!(drop_count.get(), 1);
+}
+
+/// Verifies `Marker::allocate()` doesn't accidentally drop or leak data.
+#[test]
+fn marker_allocate_test() {
+    let drop_count = Cell::new(0);
+
+    {
+        let scratchpad = Scratchpad::<[usize; 1], [usize; 1]>::static_new();
+        let marker = scratchpad.mark_front().unwrap();
+
+        let _allocation =
+            marker.allocate(DropCounter::new(&drop_count)).unwrap();
+        assert_eq!(drop_count.get(), 0);
+    }
+
+    assert_eq!(drop_count.get(), 1);
+}
+
+/// Verifies `Marker::allocate_array()` doesn't accidentally drop or leak
+/// data.
+#[test]
+fn marker_allocate_array_test() {
+    let drop_count = Cell::new(0);
+
+    {
+        let scratchpad = Scratchpad::<[usize; 10], [usize; 1]>::static_new();
+        let marker = scratchpad.mark_front().unwrap();
+
+        let _allocation = marker
+            .allocate_array(10, DropCounter::new(&drop_count))
+            .unwrap();
+
+        // When writing this test, `Marker::allocate_array()` only ever stores
+        // clones of the initial value and drops the original parameter given,
+        // but it may be possible to optimize it at some point to use the
+        // original value as well and save a clone operation, so we'll allow
+        // for either zero or one drop during array creation.
+        assert!(drop_count.get() <= 1);
+        drop_count.set(0);
+    }
+
+    assert_eq!(drop_count.get(), 10);
+}
+
+/// Verifies `Marker::allocate_array_with()` doesn't accidentally drop or leak
+/// data.
+#[test]
+fn marker_allocate_array_with_test() {
+    let drop_count = Cell::new(0);
+
+    {
+        let scratchpad = Scratchpad::<[usize; 10], [usize; 1]>::static_new();
+        let marker = scratchpad.mark_front().unwrap();
+
+        let _allocation = marker
+            .allocate_array_with(10, |_| DropCounter::new(&drop_count))
+            .unwrap();
+        assert_eq!(drop_count.get(), 0);
+    }
+
+    assert_eq!(drop_count.get(), 10);
+}
+
+/// Verifies `Marker::extend()` doesn't accidentally drop or leak data.
+#[test]
+fn marker_extend_test() {
+    let drop_count = Cell::new(0);
+
+    {
+        let scratchpad = Scratchpad::<[usize; 8], [usize; 1]>::static_new();
+        let marker = scratchpad.mark_back().unwrap();
+
+        let allocation =
+            marker.allocate(DropCounter::new(&drop_count)).unwrap();
+        let allocation = marker
+            .extend(allocation, DropCounter::new(&drop_count))
+            .unwrap();
+
+        #[cfg(any(feature = "std", feature = "unstable"))]
+        let allocation = {
+            let mut v = Vec::with_capacity(2);
+            v.push(DropCounter::new(&drop_count));
+            v.push(DropCounter::new(&drop_count));
+
+            let mut bs = v.clone().into_boxed_slice();
+
+            let ba = Box::new([
+                DropCounter::new(&drop_count),
+                DropCounter::new(&drop_count),
+            ]);
+
+            let allocation = marker.extend(allocation, v).unwrap();
+            let allocation = marker.extend(allocation, bs).unwrap();
+            let allocation = marker.extend(allocation, ba).unwrap();
+
+            allocation
+        };
+
+        assert_eq!(drop_count.get(), 0);
+
+        let _ = allocation; // Silence unused variable warnings...
+    }
+
+    if cfg!(any(feature = "std", feature = "unstable")) {
+        assert_eq!(drop_count.get(), 8);
+    } else {
+        assert_eq!(drop_count.get(), 2);
+    }
+}
+
+/// Verifies `Marker::extend_clone()` doesn't accidentally drop or leak data.
+#[test]
+fn marker_extend_clone_test() {
+    let drop_count = Cell::new(0);
+
+    {
+        let scratchpad = Scratchpad::<[usize; 8], [usize; 1]>::static_new();
+        let marker = scratchpad.mark_back().unwrap();
+
+        let allocation =
+            marker.allocate(DropCounter::new(&drop_count)).unwrap();
+        let allocation = marker
+            .extend_clone(allocation, &[DropCounter::new(&drop_count)][..])
+            .unwrap();
+        assert_eq!(drop_count.get(), 1);
+
+        #[cfg(any(feature = "std", feature = "unstable"))]
+        let allocation = {
+            let mut v = Vec::with_capacity(2);
+            v.push(DropCounter::new(&drop_count));
+            v.push(DropCounter::new(&drop_count));
+
+            let mut bs = v.clone().into_boxed_slice();
+
+            let ba = Box::new([
+                DropCounter::new(&drop_count),
+                DropCounter::new(&drop_count),
+            ]);
+
+            let allocation = marker.extend_clone(allocation, v).unwrap();
+            let allocation = marker.extend_clone(allocation, &*bs).unwrap();
+            let allocation =
+                marker.extend_clone(allocation, &ba[..]).unwrap();
+
+            // `v` was dropped since it was passed by value, but `bs` and `ba`
+            // were only passed by reference, so their contents shouldn't have
+            // been dropped.
+            assert_eq!(drop_count.get(), 3);
+
+            drop(bs);
+            drop(ba);
+            assert_eq!(drop_count.get(), 7);
+
+            allocation
+        };
+
+        let _ = allocation; // Silence unused variable warnings...
+    }
+
+    if cfg!(any(feature = "std", feature = "unstable")) {
+        assert_eq!(drop_count.get(), 15);
+    } else {
+        assert_eq!(drop_count.get(), 3);
+    }
 }
 
 /// Verifies ZST allocations work properly.
