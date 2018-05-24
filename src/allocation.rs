@@ -108,9 +108,6 @@ where
     /// The first two requirements are checked at compile time, while the last
     /// two are checked at runtime.
     ///
-    /// It should be noted that allocations do not necessarily have to be
-    /// created from the same marker, but the markers *do* have to have the
-    ///
     /// # Examples
     ///
     /// ```
