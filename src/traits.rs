@@ -211,13 +211,24 @@ where
 /// [`Allocation<[T]>`][`Allocation`] without losing or altering any of the
 /// allocation data.
 ///
+/// The [`into_slice_allocation()`] method performs a permanent conversion of
+/// an allocation into a slice allocation. For temporary access to the
+/// contents of an allocation as a slice, the [`as_slice()`],
+/// [`as_mut_slice()`], [`as_slice_ptr()`], and [`as_mut_slice_ptr()`] methods
+/// are also available.
+///
 /// # Safety
 ///
 /// Implementing this trait implies that a type can be safely consumed when
 /// converting into a slice allocation. Implementing it for other types can
-/// cause various undefined behavior or crashing.
+/// cause undefined behavior or crashing.
 ///
 /// [`Allocation`]: struct.Allocation.html
+/// [`as_mut_slice()`]: #method.as_mut_slice
+/// [`as_mut_slice_ptr()`]: #tymethod.as_mut_slice_ptr
+/// [`as_slice()`]: #method.as_slice
+/// [`as_slice_ptr()`]: #tymethod.as_slice_ptr
+/// [`into_slice_allocation()`]: #method.into_slice_allocation
 pub unsafe trait IntoSliceAllocation<'marker, T>: Sized
 where
     T: Sized,

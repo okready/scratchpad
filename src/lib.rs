@@ -68,6 +68,9 @@
 //!   also exist for cloning ([`append_clone()`], [`prepend_clone()`]) and
 //!   copying ([`append_copy()`], [`prepend_copy()`]) the source values
 //!   without moving them into an allocation.
+//! - **Slice conversion.** Existing allocations can be converted into a slice
+//!   allocation using the [`IntoSliceAllocation`] trait without moving or
+//!   altering the contents of the allocation.
 //! - **String concatenation.** The [`Marker::concat()`] method takes a
 //!   collection of strings and, if enough space is available, returns
 //!   an allocation containing a [`str`] slice with the concatenated result.
@@ -432,6 +435,7 @@
 //! [`CACHE_ALIGNMENT`]: constant.CACHE_ALIGNMENT.html
 //! [`CacheAligned`]: struct.CacheAligned.html
 //! [`Drop`]: https://doc.rust-lang.org/core/ops/trait.Drop.html
+//! [`IntoSliceAllocation`]: trait.IntoSliceAllocation.html
 //! [`mark_back()`]: struct.Scratchpad.html#method.mark_back
 //! [`mark_front()`]: struct.Scratchpad.html#method.mark_front
 //! [`Marker`]: trait.Marker.html
