@@ -256,8 +256,7 @@ where
     /// // the array or a slice with only one element containing the entire
     /// // array. We must explicitly specify the slice type in this example.
     /// let array = marker.allocate([9, 8, 7]).unwrap();
-    /// let array_slice: Allocation<'_, [i32]> =
-    ///     array.into_slice_allocation();
+    /// let array_slice: Allocation<[i32]> = array.into_slice_allocation();
     /// assert_eq!(*array_slice, [9, 8, 7]);
     /// ```
     #[inline]
