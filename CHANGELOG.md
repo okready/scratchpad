@@ -34,6 +34,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   and any values whose ownership was intended to be passed to the callee. This
   allows the caller to reuse such values if an operation fails instead of
   simply throwing them away.
+- Replaced `Marker::concat()` with `Marker::concat_slices_clone()` and
+  `Marker::concat_slices_copy()`, which both work on general slices.
 - Use `NonNull<T>` for internal storage of `Allocation` pointers, allowing for
   compiler optimizations such as reducing `Option<Allocation<'marker, T>>`
   size to that of a single pointer.

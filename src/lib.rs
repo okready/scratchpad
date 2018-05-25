@@ -57,7 +57,7 @@
 //! ## Additional Functionality
 //!
 //! Aside from general memory management routines, the crate also provides a
-//! couple additional features:
+//! few additional features:
 //!
 //! - **Generalized slice support.** Slices can be moved, cloned, or copied
 //!   into an allocation using [`Marker::allocate_slice()`],
@@ -65,18 +65,22 @@
 //!   [`Marker::allocate_slice_copy()`], and existing allocations can be
 //!   converted into slice allocations using the [`IntoSliceAllocation`]
 //!   trait. Allocations of [`str`] slices are supported as well.
-//! - **Allocation concatenation.** The [`Allocation::concat()`] method allows
-//!   for combining two adjacent allocations of a scalar, array, or slice of a
-//!   given type into a single slice allocation.
-//! - **Allocation extension.** The [`MarkerFront::append()`] and
-//!   [`MarkerBack::prepend()`] methods allow for extending allocations at the
-//!   end of their respective stacks with new data. Variants of these methods
-//!   also exist for cloning ([`append_clone()`], [`prepend_clone()`]) and
-//!   copying ([`append_copy()`], [`prepend_copy()`]) the source values
-//!   without moving them into an allocation.
-//! - **String concatenation.** The [`Marker::concat()`] method takes a
-//!   collection of strings and, if enough space is available, returns
-//!   an allocation containing a [`str`] slice with the concatenated result.
+//! - **Extending and concatenating allocations.** Under certain conditions,
+//!   allocations can be added to or combined:
+//!   - If two existing allocations from a given scratchpad are adjacent in
+//!     memory, they can be combined into a single slice allocation using
+//!     [`Allocation::concat()`]. An unsafe option,
+//!     [`Allocation::concat_unchecked()`], is also available that circumvents
+//!     runtime validity checks when performance is a concern.
+//!   - [`MarkerFront::append()`] and [`MarkerBack::prepend()`] allow for
+//!     extending allocations at the end of their respective stacks with new
+//!     data. Variants of these methods also exist for cloning
+//!     ([`append_clone()`], [`prepend_clone()`]) and copying
+//!     ([`append_copy()`], [`prepend_copy()`]) the source values without
+//!     moving them into an allocation.
+//!   - [`Marker::concat_slices_clone()`] and [`Marker::concat_slices_copy()`]
+//!     generate a single allocation from multiple concatenated slices in a
+//!     single operation.
 //!
 //! ## Use Cases
 //!
@@ -423,6 +427,7 @@
 //!
 //! [`Allocation`]: struct.Allocation.html
 //! [`Allocation::concat()`]: struct.Allocation.html#method.concat
+//! [`Allocation::concat_unchecked()`]: struct.Allocation.html#method.concat_unchecked
 //! [`append_clone()`]: struct.MarkerFront.html#method.append_clone
 //! [`append_copy()`]: struct.MarkerFront.html#method.append_copy
 //! [`array_len_for_bytes!()`]: macro.array_len_for_bytes.html
@@ -445,7 +450,8 @@
 //! [`Marker::allocate_slice()`]: trait.Marker.html#method.allocate_slice
 //! [`Marker::allocate_slice_clone()`]: trait.Marker.html#method.allocate_slice_clone
 //! [`Marker::allocate_slice_copy()`]: trait.Marker.html#method.allocate_slice_copy
-//! [`Marker::concat()`]: trait.Marker.html#method.concat
+//! [`Marker::concat_slices_clone()`]: trait.Marker.html#method.concat_slices_clone
+//! [`Marker::concat_slices_copy()`]: trait.Marker.html#method.concat_slices_copy
 //! [`MarkerBack::prepend()`]: struct.MarkerBack.html#method.prepend
 //! [`MarkerFront::append()`]: struct.MarkerFront.html#method.append
 //! [`prepend_clone()`]: struct.MarkerBack.html#method.prepend_clone
