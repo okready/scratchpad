@@ -15,7 +15,6 @@ use super::{
     Allocation, Buffer, ConcatenateSlice, Error, ErrorKind,
     IntoSliceAllocation, OwnedSlice, Scratchpad, SliceLike, Tracking,
 };
-use core::borrow::Borrow;
 use core::marker::PhantomData;
 use core::mem::{align_of, forget, size_of};
 use core::ptr::NonNull;
@@ -460,29 +459,9 @@ pub trait Marker {
 
         // Create a new allocation for the value given and merge the two
         // allocations. This will also perform all remaining validity checks.
-        let source = unsafe { (*values.as_slice_ptr()).as_element_slice() };
-        match self.allocate_array_with::<<T as SliceLike>::Element, _>(
-            source.len(),
-            |index| unsafe { ptr::read(&source[index]) },
-        ) {
-            Err(e) => Err(e.map(|()| (allocation, values))),
-            Ok(mut val_alloc) => unsafe {
-                <V as OwnedSlice<T>>::drop_container(values);
-
-                let val_alloc = {
-                    let slice_ptr =
-                        &mut *val_alloc as *mut [<T as SliceLike>::Element];
-                    forget(val_alloc);
-                    Allocation {
-                        data: NonNull::new_unchecked(
-                            <T as SliceLike>::from_element_slice_mut(
-                                &mut *slice_ptr,
-                            ),
-                        ),
-                        _phantom: PhantomData,
-                    }
-                };
-
+        match self.allocate_slice::<T, V>(values) {
+            Err(e) => Err(e.map(|(vals,)| (allocation, vals))),
+            Ok(val_alloc) => unsafe {
                 Ok(Self::concat_allocations_unchecked::<T, U, T>(
                     allocation, val_alloc,
                 ))
@@ -532,18 +511,16 @@ pub trait Marker {
     ///
     /// [`MarkerBack`]: struct.MarkerBack.html
     /// [`MarkerFront`]: struct.MarkerFront.html
-    fn extend_clone<'marker, T, U, IntoIteratorT, IteratorT, RefT>(
+    fn extend_clone<'marker, T, U>(
         &'marker self,
         allocation: Allocation<'marker, U>,
-        values: IntoIteratorT,
-    ) -> Result<Allocation<'marker, [T]>, Error<(Allocation<'marker, U>,)>>
+        slice: &T,
+    ) -> Result<Allocation<'marker, T>, Error<(Allocation<'marker, U>,)>>
     where
-        T: Clone,
+        T: ConcatenateSlice + ?Sized,
+        <T as SliceLike>::Element: Clone,
         U: ?Sized,
-        Allocation<'marker, U>: IntoSliceAllocation<'marker, [T]>,
-        IntoIteratorT: IntoIterator<Item = RefT, IntoIter = IteratorT>,
-        IteratorT: ExactSizeIterator<Item = RefT>,
-        RefT: Borrow<T>,
+        Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
     {
         // Verify that the allocation is at the end of the marker.
         if !self.is_allocation_at_end(&allocation) {
@@ -552,23 +529,10 @@ pub trait Marker {
 
         // Create a new allocation for the value given and merge the two
         // allocations. This will also perform all remaining validity checks.
-        let source = values.into_iter();
-        let source_len = source.len();
-        match unsafe { self.allocate_array_uninitialized(source_len) } {
+        match self.allocate_slice_clone::<T>(slice) {
             Err(e) => Err(e.map(|()| (allocation,))),
-            Ok(mut val_alloc) => unsafe {
-                let mut index = 0;
-                for source_val in source {
-                    ptr::write(
-                        &mut val_alloc[index],
-                        source_val.borrow().clone(),
-                    );
-                    index += 1;
-                }
-
-                assert_eq!(index, source_len);
-
-                Ok(Self::concat_allocations_unchecked::<[T], U, [T]>(
+            Ok(val_alloc) => unsafe {
+                Ok(Self::concat_allocations_unchecked::<T, U, T>(
                     allocation, val_alloc,
                 ))
             },
@@ -617,18 +581,16 @@ pub trait Marker {
     ///
     /// [`MarkerBack`]: struct.MarkerBack.html
     /// [`MarkerFront`]: struct.MarkerFront.html
-    fn extend_copy<'marker, T, U, IntoIteratorT, IteratorT, RefT>(
+    fn extend_copy<'marker, T, U>(
         &'marker self,
         allocation: Allocation<'marker, U>,
-        values: IntoIteratorT,
-    ) -> Result<Allocation<'marker, [T]>, Error<(Allocation<'marker, U>,)>>
+        slice: &T,
+    ) -> Result<Allocation<'marker, T>, Error<(Allocation<'marker, U>,)>>
     where
-        T: Copy,
+        T: ConcatenateSlice + ?Sized,
+        <T as SliceLike>::Element: Copy,
         U: ?Sized,
-        Allocation<'marker, U>: IntoSliceAllocation<'marker, [T]>,
-        IntoIteratorT: IntoIterator<Item = RefT, IntoIter = IteratorT>,
-        IteratorT: ExactSizeIterator<Item = RefT>,
-        RefT: Borrow<T>,
+        Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
     {
         // Verify that the allocation is at the end of the marker.
         if !self.is_allocation_at_end(&allocation) {
@@ -637,20 +599,10 @@ pub trait Marker {
 
         // Create a new allocation for the value given and merge the two
         // allocations. This will also perform all remaining validity checks.
-        let source = values.into_iter();
-        let source_len = source.len();
-        match unsafe { self.allocate_array_uninitialized(source_len) } {
+        match self.allocate_slice_copy::<T>(slice) {
             Err(e) => Err(e.map(|()| (allocation,))),
-            Ok(mut val_alloc) => unsafe {
-                let mut index = 0;
-                for source_val in source {
-                    ptr::write(&mut val_alloc[index], *source_val.borrow());
-                    index += 1;
-                }
-
-                assert_eq!(index, source_len);
-
-                Ok(Self::concat_allocations_unchecked::<[T], U, [T]>(
+            Ok(val_alloc) => unsafe {
+                Ok(Self::concat_allocations_unchecked::<T, U, T>(
                     allocation, val_alloc,
                 ))
             },
@@ -1316,20 +1268,18 @@ where
     /// assert_eq!(*ab, [3.14159f32, 2.71828f32, 0.57722f32, 1.61803f32]);
     /// ```
     #[inline(always)]
-    pub fn append_clone<'marker, T, U, IntoIteratorT, IteratorT, RefT>(
+    pub fn append_clone<'marker, T, U>(
         &'marker self,
         allocation: Allocation<'marker, U>,
-        values: IntoIteratorT,
-    ) -> Result<Allocation<'marker, [T]>, Error<(Allocation<'marker, U>,)>>
+        slice: &T,
+    ) -> Result<Allocation<'marker, T>, Error<(Allocation<'marker, U>,)>>
     where
-        T: Clone,
+        T: ConcatenateSlice + ?Sized,
+        <T as SliceLike>::Element: Clone,
         U: ?Sized,
-        Allocation<'marker, U>: IntoSliceAllocation<'marker, [T]>,
-        IntoIteratorT: IntoIterator<Item = RefT, IntoIter = IteratorT>,
-        IteratorT: ExactSizeIterator<Item = RefT>,
-        RefT: Borrow<T>,
+        Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
     {
-        Marker::extend_clone(self, allocation, values)
+        Marker::extend_clone(self, allocation, slice)
     }
 
     /// Extends an allocation by copying values onto its end, converting the
@@ -1367,20 +1317,18 @@ where
     /// assert_eq!(*ab, [3.14159f32, 2.71828f32, 0.57722f32, 1.61803f32]);
     /// ```
     #[inline(always)]
-    pub fn append_copy<'marker, T, U, IntoIteratorT, IteratorT, RefT>(
+    pub fn append_copy<'marker, T, U>(
         &'marker self,
         allocation: Allocation<'marker, U>,
-        values: IntoIteratorT,
-    ) -> Result<Allocation<'marker, [T]>, Error<(Allocation<'marker, U>,)>>
+        slice: &T,
+    ) -> Result<Allocation<'marker, T>, Error<(Allocation<'marker, U>,)>>
     where
-        T: Copy,
+        T: ConcatenateSlice + ?Sized,
+        <T as SliceLike>::Element: Copy,
         U: ?Sized,
-        Allocation<'marker, U>: IntoSliceAllocation<'marker, [T]>,
-        IntoIteratorT: IntoIterator<Item = RefT, IntoIter = IteratorT>,
-        IteratorT: ExactSizeIterator<Item = RefT>,
-        RefT: Borrow<T>,
+        Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
     {
-        Marker::extend_copy(self, allocation, values)
+        Marker::extend_copy(self, allocation, slice)
     }
 
     /// Combines cloned copies of each of the provided slices into a single
@@ -1951,20 +1899,18 @@ where
     /// assert_eq!(*ab, [0.57722f32, 1.61803f32, 3.14159f32, 2.71828f32]);
     /// ```
     #[inline(always)]
-    pub fn prepend_clone<'marker, T, U, IntoIteratorT, IteratorT, RefT>(
+    pub fn prepend_clone<'marker, T, U>(
         &'marker self,
         allocation: Allocation<'marker, U>,
-        values: IntoIteratorT,
-    ) -> Result<Allocation<'marker, [T]>, Error<(Allocation<'marker, U>,)>>
+        slice: &T,
+    ) -> Result<Allocation<'marker, T>, Error<(Allocation<'marker, U>,)>>
     where
-        T: Clone,
+        T: ConcatenateSlice + ?Sized,
+        <T as SliceLike>::Element: Clone,
         U: ?Sized,
-        Allocation<'marker, U>: IntoSliceAllocation<'marker, [T]>,
-        IntoIteratorT: IntoIterator<Item = RefT, IntoIter = IteratorT>,
-        IteratorT: ExactSizeIterator<Item = RefT>,
-        RefT: Borrow<T>,
+        Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
     {
-        Marker::extend_clone(self, allocation, values)
+        Marker::extend_clone(self, allocation, slice)
     }
 
     /// Extends an allocation by copying values onto its start, converting the
@@ -2002,20 +1948,18 @@ where
     /// assert_eq!(*ab, [0.57722f32, 1.61803f32, 3.14159f32, 2.71828f32]);
     /// ```
     #[inline(always)]
-    pub fn prepend_copy<'marker, T, U, IntoIteratorT, IteratorT, RefT>(
+    pub fn prepend_copy<'marker, T, U>(
         &'marker self,
         allocation: Allocation<'marker, U>,
-        values: IntoIteratorT,
-    ) -> Result<Allocation<'marker, [T]>, Error<(Allocation<'marker, U>,)>>
+        slice: &T,
+    ) -> Result<Allocation<'marker, T>, Error<(Allocation<'marker, U>,)>>
     where
-        T: Copy,
+        T: ConcatenateSlice + ?Sized,
+        <T as SliceLike>::Element: Copy,
         U: ?Sized,
-        Allocation<'marker, U>: IntoSliceAllocation<'marker, [T]>,
-        IntoIteratorT: IntoIterator<Item = RefT, IntoIter = IteratorT>,
-        IteratorT: ExactSizeIterator<Item = RefT>,
-        RefT: Borrow<T>,
+        Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
     {
-        Marker::extend_copy(self, allocation, values)
+        Marker::extend_copy(self, allocation, slice)
     }
 
     /// Combines cloned copies of each of the provided slices into a single

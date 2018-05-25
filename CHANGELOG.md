@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Changes
+- Modified `Marker::extend_clone()` and `Marker::extend_copy()` (and the
+  related `MarkerFront` and `MarkerBack` methods) to take the same types of
+  slice parameters as the corresponding slice allocation methods
+  (`allocate_slice_copy()` and `allocate_slice_clone()`). This not only
+  improves interface consistency, but also allows for DSTs that wrap slice
+  types such as `str` to be used with the extend/append/prepend methods. The
+  extend method implementations now also make use of the corresponding slice
+  allocation methods to reduce redundant code.
+
 ### Removed
 - Unnecessary generic parameters.
 

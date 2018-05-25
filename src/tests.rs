@@ -616,54 +616,18 @@ fn marker_extend_clone_test() {
     let drop_count = Cell::new(0);
 
     {
-        let scratchpad = Scratchpad::<[usize; 8], [usize; 1]>::static_new();
+        let scratchpad = Scratchpad::<[usize; 2], [usize; 1]>::static_new();
         let marker = scratchpad.mark_back().unwrap();
 
         let allocation =
             marker.allocate(DropCounter::new(&drop_count)).unwrap();
-        let allocation = marker
+        let _allocation = marker
             .extend_clone(allocation, &[DropCounter::new(&drop_count)][..])
             .unwrap();
         assert_eq!(drop_count.get(), 1);
-
-        #[cfg(any(feature = "std", feature = "unstable"))]
-        let allocation = {
-            let mut v = Vec::with_capacity(2);
-            v.push(DropCounter::new(&drop_count));
-            v.push(DropCounter::new(&drop_count));
-
-            let mut bs = v.clone().into_boxed_slice();
-
-            let ba = Box::new([
-                DropCounter::new(&drop_count),
-                DropCounter::new(&drop_count),
-            ]);
-
-            let allocation = marker.extend_clone(allocation, v).unwrap();
-            let allocation = marker.extend_clone(allocation, &*bs).unwrap();
-            let allocation =
-                marker.extend_clone(allocation, &ba[..]).unwrap();
-
-            // `v` was dropped since it was passed by value, but `bs` and `ba`
-            // were only passed by reference, so their contents shouldn't have
-            // been dropped.
-            assert_eq!(drop_count.get(), 3);
-
-            drop(bs);
-            drop(ba);
-            assert_eq!(drop_count.get(), 7);
-
-            allocation
-        };
-
-        let _ = allocation; // Silence unused variable warnings...
     }
 
-    if cfg!(any(feature = "std", feature = "unstable")) {
-        assert_eq!(drop_count.get(), 15);
-    } else {
-        assert_eq!(drop_count.get(), 3);
-    }
+    assert_eq!(drop_count.get(), 3);
 }
 
 /// Verifies `Allocation::concat()` works with strings.
