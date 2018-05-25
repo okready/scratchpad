@@ -6,8 +6,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 ### Removed
-- Extraneous lifetime parameter left in the `Marker::concat_slices_clone()`
-  signature.
+- Unnecessary generic parameters.
 
 ## [1.0.0-beta.1] - 2018-05-25
 ### Added

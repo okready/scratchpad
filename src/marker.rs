@@ -321,13 +321,13 @@ pub trait Marker {
     /// let allocation = marker.allocate_slice_clone(message).unwrap();
     /// assert_eq!(&*allocation, "foo");
     /// ```
-    fn allocate_slice_clone<'marker, T, U>(
+    fn allocate_slice_clone<'marker, T>(
         &'marker self,
         slice: &T,
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
-        T: SliceLike<Element = U> + ?Sized,
-        U: Clone,
+        T: SliceLike + ?Sized,
+        <T as SliceLike>::Element: Clone,
     {
         unsafe {
             let element_slice = <T as SliceLike>::as_element_slice(slice);
@@ -366,13 +366,13 @@ pub trait Marker {
     /// let allocation = marker.allocate_slice_copy(message).unwrap();
     /// assert_eq!(&*allocation, "foo");
     /// ```
-    fn allocate_slice_copy<'marker, T, U>(
+    fn allocate_slice_copy<'marker, T>(
         &'marker self,
         slice: &T,
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
-        T: SliceLike<Element = U> + ?Sized,
-        U: Copy,
+        T: SliceLike + ?Sized,
+        <T as SliceLike>::Element: Copy,
     {
         unsafe {
             let element_slice = <T as SliceLike>::as_element_slice(slice);
@@ -672,20 +672,23 @@ pub trait Marker {
     ///     .unwrap();
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
-    fn concat_slices_clone<'marker, T, E>(
+    fn concat_slices_clone<'marker, T>(
         &'marker self,
         slices: &[&T],
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
-        T: ConcatenateSlice + SliceLike<Element = E> + ?Sized,
-        E: Clone,
+        T: ConcatenateSlice + ?Sized,
+        <T as SliceLike>::Element: Clone,
     {
         unsafe {
             let len = slices.iter().fold(0usize, |sum, item| {
                 sum + item.as_element_slice().len()
             });
 
-            let mut allocation = self.allocate_array_uninitialized::<E>(len)?;
+            let mut allocation = self
+                .allocate_array_uninitialized::<<T as SliceLike>::Element>(
+                    len,
+                )?;
             let mut index = 0;
             for item in slices {
                 for element in item.as_element_slice() {
@@ -728,20 +731,23 @@ pub trait Marker {
     ///     .unwrap();
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
-    fn concat_slices_copy<'marker, T, E>(
+    fn concat_slices_copy<'marker, T>(
         &'marker self,
         slices: &[&T],
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
-        T: ConcatenateSlice + SliceLike<Element = E> + ?Sized,
-        E: Copy,
+        T: ConcatenateSlice + ?Sized,
+        <T as SliceLike>::Element: Copy,
     {
         unsafe {
             let len = slices.iter().fold(0usize, |sum, item| {
                 sum + item.as_element_slice().len()
             });
 
-            let mut allocation = self.allocate_array_uninitialized::<E>(len)?;
+            let mut allocation = self
+                .allocate_array_uninitialized::<<T as SliceLike>::Element>(
+                    len,
+                )?;
             let mut start = 0;
             for item in slices {
                 let elements = item.as_element_slice();
@@ -1188,13 +1194,13 @@ where
     /// assert_eq!(&*allocation, "foo");
     /// ```
     #[inline(always)]
-    pub fn allocate_slice_clone<'marker, T, U>(
+    pub fn allocate_slice_clone<'marker, T>(
         &'marker self,
         slice: &T,
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
-        T: SliceLike<Element = U> + ?Sized,
-        U: Clone,
+        T: SliceLike + ?Sized,
+        <T as SliceLike>::Element: Clone,
     {
         Marker::allocate_slice_clone(self, slice)
     }
@@ -1215,13 +1221,13 @@ where
     /// assert_eq!(&*allocation, "foo");
     /// ```
     #[inline(always)]
-    pub fn allocate_slice_copy<'marker, T, U>(
+    pub fn allocate_slice_copy<'marker, T>(
         &'marker self,
         slice: &T,
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
-        T: SliceLike<Element = U> + ?Sized,
-        U: Copy,
+        T: SliceLike + ?Sized,
+        <T as SliceLike>::Element: Copy,
     {
         Marker::allocate_slice_copy(self, slice)
     }
@@ -1393,13 +1399,13 @@ where
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     #[inline(always)]
-    pub fn concat_slices_clone<'marker, T, E>(
+    pub fn concat_slices_clone<'marker, T>(
         &'marker self,
         slices: &[&T],
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
-        T: ConcatenateSlice + SliceLike<Element = E> + ?Sized,
-        E: Clone,
+        T: ConcatenateSlice + ?Sized,
+        <T as SliceLike>::Element: Clone,
     {
         Marker::concat_slices_clone(self, slices)
     }
@@ -1423,13 +1429,13 @@ where
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     #[inline(always)]
-    pub fn concat_slices_copy<'marker, T, E>(
+    pub fn concat_slices_copy<'marker, T>(
         &'marker self,
         slices: &[&T],
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
-        T: ConcatenateSlice + SliceLike<Element = E> + ?Sized,
-        E: Copy,
+        T: ConcatenateSlice + ?Sized,
+        <T as SliceLike>::Element: Copy,
     {
         Marker::concat_slices_copy(self, slices)
     }
@@ -1823,13 +1829,13 @@ where
     /// assert_eq!(&*allocation, "foo");
     /// ```
     #[inline(always)]
-    pub fn allocate_slice_clone<'marker, T, U>(
+    pub fn allocate_slice_clone<'marker, T>(
         &'marker self,
         slice: &T,
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
-        T: SliceLike<Element = U> + ?Sized,
-        U: Clone,
+        T: SliceLike + ?Sized,
+        <T as SliceLike>::Element: Clone,
     {
         Marker::allocate_slice_clone(self, slice)
     }
@@ -1850,13 +1856,13 @@ where
     /// assert_eq!(&*allocation, "foo");
     /// ```
     #[inline(always)]
-    pub fn allocate_slice_copy<'marker, T, U>(
+    pub fn allocate_slice_copy<'marker, T>(
         &'marker self,
         slice: &T,
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
-        T: SliceLike<Element = U> + ?Sized,
-        U: Copy,
+        T: SliceLike + ?Sized,
+        <T as SliceLike>::Element: Copy,
     {
         Marker::allocate_slice_copy(self, slice)
     }
@@ -2028,13 +2034,13 @@ where
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     #[inline(always)]
-    pub fn concat_slices_clone<'marker, T, E>(
+    pub fn concat_slices_clone<'marker, T>(
         &'marker self,
         slices: &[&T],
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
-        T: ConcatenateSlice + SliceLike<Element = E> + ?Sized,
-        E: Clone,
+        T: ConcatenateSlice + ?Sized,
+        <T as SliceLike>::Element: Clone,
     {
         Marker::concat_slices_clone(self, slices)
     }
@@ -2058,13 +2064,13 @@ where
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     #[inline(always)]
-    pub fn concat_slices_copy<'marker, T, E>(
+    pub fn concat_slices_copy<'marker, T>(
         &'marker self,
         slices: &[&T],
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
-        T: ConcatenateSlice + SliceLike<Element = E> + ?Sized,
-        E: Copy,
+        T: ConcatenateSlice + ?Sized,
+        <T as SliceLike>::Element: Copy,
     {
         Marker::concat_slices_copy(self, slices)
     }
