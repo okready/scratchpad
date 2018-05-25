@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 ### Added
+- `Marker::allocate_slice()`, `Marker::allocate_slice_clone()`, and
+  `Marker::allocate_slice_copy()` for creating slice allocations.
 - `Allocation::concat()` and `Allocation::concat_unchecked()` for
   concatenating two adjacent allocations into a single slice allocation.
 - `MarkerFront::append{,_clone,_copy}()` and
@@ -18,6 +20,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   allocations of slices. This is also used to determine what types can be used
   for allocation concatenation (`concat()` and `concat_unchecked()` allocation
   methods) and extension (`append*()` and `prepend*()` marker methods).
+- `SliceLike` trait for performing conversions between DSTs that essentially
+  wrap some primitive slice type and the underlying slice type (e.g. between
+  `str` and `[u8]`), and `ConcatenateSlice` trait for marking `SliceLike`
+  types that can be safely concatenated without any additional verification
+  needed. This is used to allow for general use of such DSTs in allocations.
 - Various unit tests for edge cases (e.g. allocation extension safety, ZST
   allocation support).
 

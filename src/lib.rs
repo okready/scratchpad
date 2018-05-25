@@ -59,6 +59,12 @@
 //! Aside from general memory management routines, the crate also provides a
 //! couple additional features:
 //!
+//! - **Generalized slice support.** Slices can be moved, cloned, or copied
+//!   into an allocation using [`Marker::allocate_slice()`],
+//!   [`Marker::allocate_slice_clone()`], or
+//!   [`Marker::allocate_slice_copy()`], and existing allocations can be
+//!   converted into slice allocations using the [`IntoSliceAllocation`]
+//!   trait. Allocations of [`str`] slices are supported as well.
 //! - **Allocation concatenation.** The [`Allocation::concat()`] method allows
 //!   for combining two adjacent allocations of a scalar, array, or slice of a
 //!   given type into a single slice allocation.
@@ -68,9 +74,6 @@
 //!   also exist for cloning ([`append_clone()`], [`prepend_clone()`]) and
 //!   copying ([`append_copy()`], [`prepend_copy()`]) the source values
 //!   without moving them into an allocation.
-//! - **Slice conversion.** Existing allocations can be converted into a slice
-//!   allocation using the [`IntoSliceAllocation`] trait without moving or
-//!   altering the contents of the allocation.
 //! - **String concatenation.** The [`Marker::concat()`] method takes a
 //!   collection of strings and, if enough space is available, returns
 //!   an allocation containing a [`str`] slice with the concatenated result.
@@ -439,6 +442,9 @@
 //! [`mark_back()`]: struct.Scratchpad.html#method.mark_back
 //! [`mark_front()`]: struct.Scratchpad.html#method.mark_front
 //! [`Marker`]: trait.Marker.html
+//! [`Marker::allocate_slice()`]: trait.Marker.html#method.allocate_slice
+//! [`Marker::allocate_slice_clone()`]: trait.Marker.html#method.allocate_slice_clone
+//! [`Marker::allocate_slice_copy()`]: trait.Marker.html#method.allocate_slice_copy
 //! [`Marker::concat()`]: trait.Marker.html#method.concat
 //! [`MarkerBack::prepend()`]: struct.MarkerBack.html#method.prepend
 //! [`MarkerFront::append()`]: struct.MarkerFront.html#method.append

@@ -9,6 +9,7 @@
 //! Support traits.
 
 use core::slice;
+use core::str;
 
 use super::{Allocation, CacheAligned};
 use core::marker::PhantomData;
@@ -207,15 +208,191 @@ where
     }
 }
 
-/// Trait for safely converting an [`Allocation`] of a given type into an
-/// [`Allocation<[T]>`][`Allocation`] without losing or altering any of the
-/// allocation data.
+/// Trait for dynamically sized types that wrap some slice type.
 ///
-/// The [`into_slice_allocation()`] method performs a permanent conversion of
-/// an allocation into a slice allocation. For temporary access to the
-/// contents of an allocation as a slice, the [`as_slice()`],
-/// [`as_mut_slice()`], [`as_slice_ptr()`], and [`as_mut_slice_ptr()`] methods
-/// are also available.
+/// Some DSTs, such as [`str`], are mostly a wrapper for a basic slice type,
+/// often providing some abstraction to ensure the data isn't used in an
+/// unsafe manner. Implementing this trait for such DSTs exposes conversions
+/// to and from the slice type, allowing us to use these types with allocation
+/// operations.
+///
+/// [`str`]: https://doc.rust-lang.org/std/primitive.str.html
+pub trait SliceLike {
+    /// Slice element type.
+    type Element: Sized;
+
+    /// Returns a slice of `Self::Element` elements containing this slice's
+    /// data.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::SliceLike;
+    ///
+    /// let message = "foo";
+    /// let bytes = message.as_element_slice();
+    /// assert_eq!(bytes, &[b'f', b'o', b'o']);
+    /// ```
+    fn as_element_slice(&self) -> &[Self::Element];
+
+    /// Returns a mutable slice of `Self::Element` elements containing this
+    /// slice's data.
+    ///
+    /// # Safety
+    ///
+    /// Slices of this type may perform validity checks against the internal
+    /// data (e.g. `str` slices must contain valid UTF-8 data). This function
+    /// allows for modification of the slice contents outside such checks.
+    /// Improper use of this function can result in undefined behavior.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::SliceLike;
+    ///
+    /// let mut message = String::from("foo");
+    ///
+    /// unsafe {
+    ///     let bytes = message.as_mut_str().as_element_slice_mut();
+    ///     bytes[0] = b'b';
+    ///     bytes[1] = b'a';
+    ///     bytes[2] = b'r';
+    /// }
+    ///
+    /// assert_eq!(message, "bar");
+    /// ```
+    unsafe fn as_element_slice_mut(&mut self) -> &mut [Self::Element];
+
+    /// Reinterprets a slice of `Self::Inner` elements as a slice of this
+    /// type.
+    ///
+    /// # Safety
+    ///
+    /// Slices of this type may perform validity checks against the internal
+    /// data (e.g. `str` slices must contain valid UTF-8 data). This function
+    /// bypasses any such checks, potentially returning data that is invalid.
+    /// Improper use of this function can result in undefined behavior.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::SliceLike;
+    ///
+    /// let bytes = [b'f', b'o', b'o'];
+    /// let message = unsafe {
+    ///     <str as SliceLike>::from_element_slice(&bytes[..])
+    /// };
+    /// assert_eq!(message, "foo");
+    /// ```
+    unsafe fn from_element_slice(slice: &[Self::Element]) -> &Self;
+
+    /// Reinterprets a mutable slice of `Self::Inner` elements as a mutable
+    /// slice of this type.
+    ///
+    /// # Safety
+    ///
+    /// Slices of this type may perform validity checks against the internal
+    /// data (e.g. `str` slices must contain valid UTF-8 data). This function
+    /// bypasses any such checks, potentially returning data that is invalid.
+    /// Improper use of this function can result in undefined behavior.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::SliceLike;
+    ///
+    /// let mut bytes = [b'f', b'o', b'o'];
+    ///
+    /// unsafe {
+    ///     let message = <str as SliceLike>::from_element_slice_mut(
+    ///         &mut bytes[..],
+    ///     );
+    ///     message.as_bytes_mut()[0] = b'b';
+    ///     message.as_bytes_mut()[1] = b'a';
+    ///     message.as_bytes_mut()[2] = b'r';
+    /// }
+    ///
+    /// assert_eq!(bytes, [b'b', b'a', b'r']);
+    /// ```
+    unsafe fn from_element_slice_mut(
+        slice: &mut [Self::Element],
+    ) -> &mut Self;
+}
+
+impl<T> SliceLike for [T] {
+    type Element = T;
+
+    #[inline]
+    fn as_element_slice(&self) -> &[Self::Element] {
+        self
+    }
+
+    #[inline]
+    unsafe fn as_element_slice_mut(&mut self) -> &mut [Self::Element] {
+        self
+    }
+
+    #[inline]
+    unsafe fn from_element_slice(slice: &[Self::Element]) -> &Self {
+        slice
+    }
+
+    #[inline]
+    unsafe fn from_element_slice_mut(
+        slice: &mut [Self::Element],
+    ) -> &mut Self {
+        slice
+    }
+}
+
+impl SliceLike for str {
+    type Element = u8;
+
+    #[inline]
+    fn as_element_slice(&self) -> &[Self::Element] {
+        self.as_bytes()
+    }
+
+    #[inline]
+    unsafe fn as_element_slice_mut(&mut self) -> &mut [Self::Element] {
+        self.as_bytes_mut()
+    }
+
+    #[inline]
+    unsafe fn from_element_slice(slice: &[Self::Element]) -> &Self {
+        str::from_utf8_unchecked(slice)
+    }
+
+    #[inline]
+    unsafe fn from_element_slice_mut(
+        slice: &mut [Self::Element],
+    ) -> &mut Self {
+        str::from_utf8_unchecked_mut(slice)
+    }
+}
+
+/// Extension of the [`SliceLike`] trait used to mark DSTs for which
+/// concatenation can safely be performed by concatenating the underlying
+/// slice type.
+///
+/// This is used as a constraint for functions such as
+/// [`Allocation::concat()`] and [`MarkerFront::append()`].
+///
+/// [`Allocation::concat()`]: struct.Allocation.html#method.concat
+/// [`MarkerFront::append()`]: struct.MarkerFront.html#method.append
+pub trait ConcatenateSlice: SliceLike {}
+
+impl<T> ConcatenateSlice for [T] {}
+impl ConcatenateSlice for str {}
+
+/// Trait for safely converting an [`Allocation`] of a given type into a slice
+/// allocation without losing or altering any of the allocation data.
+///
+/// The [`into_slice_allocation()`] and [`into_element_slice_allocation()`]
+/// methods perform permanent conversions of an allocation into a slice
+/// allocation. For temporary access to the contents of an allocation as a
+/// slice, the [`as_slice()`], [`as_mut_slice()`], [`as_slice_ptr()`], and
+/// [`as_mut_slice_ptr()`] methods are also available.
 ///
 /// # Safety
 ///
@@ -231,7 +408,7 @@ where
 /// [`into_slice_allocation()`]: #method.into_slice_allocation
 pub unsafe trait IntoSliceAllocation<'marker, T>: Sized
 where
-    T: Sized,
+    T: SliceLike + ?Sized,
 {
     /// Converts this allocation into a slice allocation without altering the
     /// allocation data.
@@ -260,9 +437,48 @@ where
     /// assert_eq!(*array_slice, [9, 8, 7]);
     /// ```
     #[inline]
-    fn into_slice_allocation(mut self) -> Allocation<'marker, [T]> {
+    fn into_slice_allocation(mut self) -> Allocation<'marker, T> {
         unsafe {
-            let slice_ptr = self.as_mut_slice_ptr();
+            let slice_ptr = (*self.as_mut_slice_ptr()).as_element_slice_mut();
+            let ptr = (*slice_ptr).as_mut_ptr();
+            let len = (*slice_ptr).len();
+            forget(self);
+
+            Allocation {
+                data: NonNull::new(<T as SliceLike>::from_element_slice_mut(
+                    slice::from_raw_parts_mut(ptr, len),
+                )).unwrap(),
+                _phantom: PhantomData,
+            }
+        }
+    }
+
+    /// Converts this allocation into a [`[T]`] slice allocation without
+    /// altering the allocation data.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::{IntoSliceAllocation, Scratchpad};
+    ///
+    /// let scratchpad = Scratchpad::<[u8; 32], [usize; 1]>::static_new();
+    /// let marker = scratchpad.mark_front().unwrap();
+    ///
+    /// let message = marker.allocate_slice_copy("foo").unwrap();
+    /// assert_eq!(&*message, "foo");
+    ///
+    /// // Calling `into_element_slice_allocation()` on a `&str` allocation
+    /// // yields a `&[u8]` allocation.
+    /// let bytes = message.into_element_slice_allocation();
+    /// assert_eq!(*bytes, [b'f', b'o', b'o']);
+    /// ```
+    ///
+    /// [`[T]`]: https://doc.rust-lang.org/std/primitive.slice.html
+    fn into_element_slice_allocation(
+        mut self,
+    ) -> Allocation<'marker, [<T as SliceLike>::Element]> {
+        unsafe {
+            let slice_ptr = (*self.as_mut_slice_ptr()).as_element_slice_mut();
             let ptr = (*slice_ptr).as_mut_ptr();
             let len = (*slice_ptr).len();
             forget(self);
@@ -305,7 +521,7 @@ where
     /// assert_eq!(*array, [9, 8, 7]);
     /// ```
     #[inline]
-    fn as_slice(&self) -> &[T] {
+    fn as_slice(&self) -> &T {
         unsafe { &*self.as_slice_ptr() }
     }
 
@@ -331,7 +547,7 @@ where
     /// assert_eq!(*array, [9, 4, 7]);
     /// ```
     #[inline]
-    fn as_mut_slice(&mut self) -> &mut [T] {
+    fn as_mut_slice(&mut self) -> &mut T {
         unsafe { &mut *self.as_mut_slice_ptr() }
     }
 
@@ -350,7 +566,7 @@ where
     /// let array_slice: *const [i32] = array.as_slice_ptr();
     /// assert_eq!(*unsafe { &*array_slice }, [9, 8, 7]);
     /// ```
-    fn as_slice_ptr(&self) -> *const [T];
+    fn as_slice_ptr(&self) -> *const T;
 
     /// Returns a mutable pointer to a slice of this allocation's data without
     /// altering the allocation.
@@ -376,26 +592,26 @@ where
     ///
     /// assert_eq!(*array, [9, 4, 7]);
     /// ```
-    fn as_mut_slice_ptr(&mut self) -> *mut [T];
+    fn as_mut_slice_ptr(&mut self) -> *mut T;
 }
 
 unsafe impl<'marker, T> IntoSliceAllocation<'marker, T>
-    for Allocation<'marker, [T]>
+    for Allocation<'marker, T>
 where
-    T: Sized,
+    T: SliceLike + ?Sized,
 {
     #[inline]
-    fn as_slice_ptr(&self) -> *const [T] {
+    fn as_slice_ptr(&self) -> *const T {
         self.data.as_ptr()
     }
 
     #[inline]
-    fn as_mut_slice_ptr(&mut self) -> *mut [T] {
+    fn as_mut_slice_ptr(&mut self) -> *mut T {
         self.data.as_ptr()
     }
 }
 
-unsafe impl<'marker, T> IntoSliceAllocation<'marker, T>
+unsafe impl<'marker, T> IntoSliceAllocation<'marker, [T]>
     for Allocation<'marker, T>
 where
     T: Sized,
@@ -413,13 +629,18 @@ where
 
 /// Trait for types containing ranges of values that can be safely moved out
 /// while consuming the original container type.
+///
+/// Note that this is also implemented for references to [`Copy`] types, as
+/// they can be copied out as well without side-effects.
+///
+/// [`Copy`]: https://doc.rust-lang.org/std/marker/trait.Copy.html
 pub trait OwnedSlice<T>: Sized
 where
-    T: Sized,
+    T: SliceLike + ?Sized,
 {
     /// Returns the owned values as a slice reference.
     #[inline]
-    fn as_slice(&self) -> &[T] {
+    fn as_slice(&self) -> &T {
         unsafe { &*self.as_slice_ptr() }
     }
 
@@ -434,7 +655,7 @@ where
     /// [`drop_container()`]: #method.drop_container
     /// [`MarkerBack::prepend()`]: struct.MarkerBack.html#method.prepend
     /// [`MarkerFront::append()`]: struct.MarkerFront.html#method.append
-    fn as_slice_ptr(&self) -> *const [T];
+    fn as_slice_ptr(&self) -> *const T;
 
     /// Consumes the container type without dropping the contained elements
     /// themselves.
@@ -452,7 +673,7 @@ where
     fn drop_container(container: Self);
 }
 
-impl<T> OwnedSlice<T> for T {
+impl<T> OwnedSlice<[T]> for T {
     #[inline]
     fn as_slice_ptr(&self) -> *const [T] {
         unsafe { slice::from_raw_parts(self, 1) }
@@ -464,8 +685,35 @@ impl<T> OwnedSlice<T> for T {
     }
 }
 
+impl<'a, T> OwnedSlice<[T]> for &'a T
+where
+    T: Copy,
+{
+    #[inline]
+    fn as_slice_ptr(&self) -> *const [T] {
+        unsafe { slice::from_raw_parts(*self, 1) }
+    }
+
+    #[inline]
+    fn drop_container(_container: Self) {}
+}
+
+impl<'a, T, U> OwnedSlice<T> for &'a T
+where
+    T: SliceLike<Element = U> + ?Sized,
+    U: Copy,
+{
+    #[inline]
+    fn as_slice_ptr(&self) -> *const T {
+        *self
+    }
+
+    #[inline]
+    fn drop_container(_container: Self) {}
+}
+
 #[cfg(any(feature = "std", feature = "unstable"))]
-impl<T> OwnedSlice<T> for Box<T> {
+impl<T> OwnedSlice<[T]> for Box<T> {
     #[inline]
     fn as_slice_ptr(&self) -> *const [T] {
         unsafe { slice::from_raw_parts(&**self, 1) }
@@ -480,22 +728,56 @@ impl<T> OwnedSlice<T> for Box<T> {
 }
 
 #[cfg(any(feature = "std", feature = "unstable"))]
-impl<T> OwnedSlice<T> for Box<[T]> {
+impl<T> OwnedSlice<T> for Box<T>
+where
+    T: SliceLike + ?Sized,
+{
     #[inline]
-    fn as_slice_ptr(&self) -> *const [T] {
+    fn as_slice_ptr(&self) -> *const T {
         &**self
     }
 
     #[inline]
     fn drop_container(container: Self) {
         unsafe {
-            Box::from_raw(Box::into_raw(container) as *mut [ManuallyDrop<T>]);
+            Box::from_raw((*Box::into_raw(container)).as_element_slice_mut()
+                as *mut [<T as SliceLike>::Element]
+                as *mut [ManuallyDrop<<T as SliceLike>::Element>]);
         }
     }
 }
 
 #[cfg(any(feature = "std", feature = "unstable"))]
-impl<T> OwnedSlice<T> for Vec<T> {
+impl<'a, T> OwnedSlice<[T]> for &'a Box<T>
+where
+    T: Copy,
+{
+    #[inline]
+    fn as_slice_ptr(&self) -> *const [T] {
+        unsafe { slice::from_raw_parts(&***self, 1) }
+    }
+
+    #[inline]
+    fn drop_container(_container: Self) {}
+}
+
+#[cfg(any(feature = "std", feature = "unstable"))]
+impl<'a, T, U> OwnedSlice<T> for &'a Box<T>
+where
+    T: SliceLike<Element = U> + ?Sized,
+    U: Copy,
+{
+    #[inline]
+    fn as_slice_ptr(&self) -> *const T {
+        &***self
+    }
+
+    #[inline]
+    fn drop_container(_container: Self) {}
+}
+
+#[cfg(any(feature = "std", feature = "unstable"))]
+impl<T> OwnedSlice<[T]> for Vec<T> {
     #[inline]
     fn as_slice_ptr(&self) -> *const [T] {
         &**self
@@ -511,6 +793,20 @@ impl<T> OwnedSlice<T> for Vec<T> {
             Vec::from_raw_parts(ptr as *mut ManuallyDrop<T>, len, capacity);
         }
     }
+}
+
+#[cfg(any(feature = "std", feature = "unstable"))]
+impl<'a, T> OwnedSlice<[T]> for &'a Vec<T>
+where
+    T: Copy,
+{
+    #[inline]
+    fn as_slice_ptr(&self) -> *const [T] {
+        &***self
+    }
+
+    #[inline]
+    fn drop_container(_container: Self) {}
 }
 
 /// Macro for generating trait implementations for static arrays.
@@ -544,7 +840,7 @@ macro_rules! generate_array_trait_impls {
             T: ByteData,
         {}
 
-        unsafe impl<'marker, T> IntoSliceAllocation<'marker, T>
+        unsafe impl<'marker, T> IntoSliceAllocation<'marker, [T]>
             for Allocation<'marker, [T; $size]>
         where
             T: Sized,
@@ -560,7 +856,7 @@ macro_rules! generate_array_trait_impls {
             }
         }
 
-        impl<T> OwnedSlice<T> for [T; $size] {
+        impl<T> OwnedSlice<[T]> for [T; $size] {
             #[inline]
             fn as_slice_ptr(&self) -> *const [T] {
                 &self[..]
@@ -573,7 +869,7 @@ macro_rules! generate_array_trait_impls {
         }
 
         #[cfg(any(feature = "std", feature = "unstable"))]
-        impl<T> OwnedSlice<T> for Box<[T; $size]> {
+        impl<T> OwnedSlice<[T]> for Box<[T; $size]> {
             #[inline]
             fn as_slice_ptr(&self) -> *const [T] {
                 &self[..]

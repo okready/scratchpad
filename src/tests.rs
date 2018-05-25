@@ -666,6 +666,29 @@ fn marker_extend_clone_test() {
     }
 }
 
+/// Verifies `Allocation::concat()` works with strings.
+#[test]
+fn allocation_concat_string_test() {
+    let scratchpad = Scratchpad::<[u8; 32], [usize; 1]>::static_new();
+    let marker = scratchpad.mark_front().unwrap();
+
+    let foo = marker.allocate_slice_copy("foo").unwrap();
+    let bar = marker.allocate_slice_copy("bar").unwrap();
+    let foobar = foo.concat(bar).unwrap();
+    assert_eq!(&*foobar, "foobar");
+}
+
+/// Verifies `Marker::extend()` works with strings.
+#[test]
+fn marker_extend_string_test() {
+    let scratchpad = Scratchpad::<[u8; 32], [usize; 1]>::static_new();
+    let marker = scratchpad.mark_front().unwrap();
+
+    let foo = marker.allocate_slice_copy("foo").unwrap();
+    let foobar = marker.extend(foo, "bar").unwrap();
+    assert_eq!(&*foobar, "foobar");
+}
+
 /// Verifies ZST allocations work properly.
 #[test]
 fn zst_test() {

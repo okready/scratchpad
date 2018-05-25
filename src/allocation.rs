@@ -12,7 +12,9 @@ use core::fmt;
 use core::ptr;
 use core::slice;
 
-use super::{Error, ErrorKind, IntoSliceAllocation};
+use super::{
+    ConcatenateSlice, Error, ErrorKind, IntoSliceAllocation, SliceLike,
+};
 use core::marker::PhantomData;
 use core::mem::forget;
 use core::ops::{Deref, DerefMut};
@@ -140,11 +142,11 @@ where
     ///
     ///     // When using a back marker, allocations must be concatenated in
     ///     // the reverse order of creation.
-    ///     let error = a.concat::<i32, _>(b).unwrap_err();
+    ///     let error = a.concat::<[i32], _>(b).unwrap_err();
     ///     assert_eq!(error.kind(), ErrorKind::OutOfOrder);
     ///     let (a, b) = error.unwrap_args();
     ///
-    ///     let ba = b.concat::<i32, _>(a).unwrap();
+    ///     let ba = b.concat::<[i32], _>(a).unwrap();
     ///     assert_eq!(*ba, [2, 3, 1]);
     /// }
     ///
@@ -162,21 +164,22 @@ where
     /// ```
     ///
     /// [`MarkerBack`]: struct.MarkerBack.html
-    pub fn concat<V, U>(
+    pub fn concat<U, V>(
         self,
-        other: Allocation<'marker, U>,
+        other: Allocation<'marker, V>,
     ) -> Result<
-        Allocation<'marker, [V]>,
-        Error<(Allocation<'marker, T>, Allocation<'marker, U>)>,
+        Allocation<'marker, U>,
+        Error<(Allocation<'marker, T>, Allocation<'marker, V>)>,
     >
     where
-        U: ?Sized,
-        Allocation<'marker, T>: IntoSliceAllocation<'marker, V>,
-        Allocation<'marker, U>: IntoSliceAllocation<'marker, V>,
+        U: ConcatenateSlice + ?Sized,
+        V: ?Sized,
+        Allocation<'marker, T>: IntoSliceAllocation<'marker, U>,
+        Allocation<'marker, V>: IntoSliceAllocation<'marker, U>,
     {
         unsafe {
-            let data0 = &*self.as_slice_ptr();
-            let data1 = &*other.as_slice_ptr();
+            let data0 = (*self.as_slice_ptr()).as_element_slice();
+            let data1 = (*other.as_slice_ptr()).as_element_slice();
             let data0_len = data0.len();
             let data1_len = data1.len();
             assert!(data0_len <= ::core::isize::MAX as usize);
@@ -231,27 +234,28 @@ where
     ///
     /// [`concat()`]: #method.concat
     #[inline]
-    pub unsafe fn concat_unchecked<V, U>(
+    pub unsafe fn concat_unchecked<U, V>(
         mut self,
-        mut other: Allocation<'marker, U>,
-    ) -> Allocation<'marker, [V]>
+        mut other: Allocation<'marker, V>,
+    ) -> Allocation<'marker, U>
     where
-        U: ?Sized,
-        Allocation<'marker, T>: IntoSliceAllocation<'marker, V>,
-        Allocation<'marker, U>: IntoSliceAllocation<'marker, V>,
+        U: ConcatenateSlice + ?Sized,
+        V: ?Sized,
+        Allocation<'marker, T>: IntoSliceAllocation<'marker, U>,
+        Allocation<'marker, V>: IntoSliceAllocation<'marker, U>,
     {
-        let data0 = &mut *self.as_mut_slice_ptr();
-        let data1 = &mut *other.as_mut_slice_ptr();
-        let data0_len = data0.len();
-        let data1_len = data1.len();
+        let data0 = (*self.as_mut_slice_ptr()).as_element_slice_mut();
+        let data1 = (*other.as_mut_slice_ptr()).as_element_slice_mut();
 
         forget(self);
         forget(other);
 
         Allocation {
-            data: NonNull::new(slice::from_raw_parts_mut(
-                data0.as_mut_ptr(),
-                data0_len + data1_len,
+            data: NonNull::new(<U as SliceLike>::from_element_slice_mut(
+                slice::from_raw_parts_mut(
+                    data0.as_mut_ptr(),
+                    data0.len() + data1.len(),
+                ),
             )).unwrap(),
             _phantom: PhantomData,
         }
