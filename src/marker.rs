@@ -672,12 +672,12 @@ pub trait Marker {
     ///     .unwrap();
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
-    fn concat_slices_clone<'marker, 'a, T, E>(
+    fn concat_slices_clone<'marker, T, E>(
         &'marker self,
         slices: &[&T],
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
-        T: ConcatenateSlice + SliceLike<Element = E> + ?Sized + 'a,
+        T: ConcatenateSlice + SliceLike<Element = E> + ?Sized,
         E: Clone,
     {
         unsafe {
@@ -1393,12 +1393,12 @@ where
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     #[inline(always)]
-    pub fn concat_slices_clone<'marker, 'a, T, E>(
+    pub fn concat_slices_clone<'marker, T, E>(
         &'marker self,
         slices: &[&T],
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
-        T: ConcatenateSlice + SliceLike<Element = E> + ?Sized + 'a,
+        T: ConcatenateSlice + SliceLike<Element = E> + ?Sized,
         E: Clone,
     {
         Marker::concat_slices_clone(self, slices)
@@ -2028,12 +2028,12 @@ where
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     #[inline(always)]
-    pub fn concat_slices_clone<'marker, 'a, T, E>(
+    pub fn concat_slices_clone<'marker, T, E>(
         &'marker self,
         slices: &[&T],
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
-        T: ConcatenateSlice + SliceLike<Element = E> + ?Sized + 'a,
+        T: ConcatenateSlice + SliceLike<Element = E> + ?Sized,
         E: Clone,
     {
         Marker::concat_slices_clone(self, slices)
