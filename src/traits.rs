@@ -933,6 +933,19 @@ macro_rules! generate_array_trait_impls {
             }
         }
 
+        impl<'a, T> SliceSource<[T]> for &'a [T; $size]
+        where
+            T: Copy,
+        {
+            #[inline]
+            fn as_slice_ptr(&self) -> *const [T] {
+                &self[..]
+            }
+
+            #[inline]
+            fn drop_container(_container: Self) {}
+        }
+
         #[cfg(any(feature = "std", feature = "unstable"))]
         impl<T> SliceSource<[T]> for Box<[T; $size]> {
             #[inline]
@@ -949,6 +962,20 @@ macro_rules! generate_array_trait_impls {
                     );
                 }
             }
+        }
+
+        #[cfg(any(feature = "std", feature = "unstable"))]
+        impl<'a, T> SliceSource<[T]> for &'a Box<[T; $size]>
+        where
+            T: Copy,
+        {
+            #[inline]
+            fn as_slice_ptr(&self) -> *const [T] {
+                &self[..]
+            }
+
+            #[inline]
+            fn drop_container(_container: Self) {}
         }
     };
 
