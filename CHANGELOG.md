@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   `OwnedSlice` implies ownership of the slice data, but we also implement it
   for a subset of borrowed reference types so that `Copy` types to be used
   with non-copy `Marker` functions).
+- Use `slice::copy_from_slice()` instead of `ptr::copy_nonoverlapping()` to
+  copy data into the new allocation in `Marker::allocate_slice_copy()` (both
+  perform essentially the same operation, but the former is safer).
 
 ### Removed
 - Unnecessary generic parameters.

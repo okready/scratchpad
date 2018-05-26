@@ -379,19 +379,15 @@ pub trait Marker {
         unsafe {
             let element_slice =
                 <T as SliceLike>::as_element_slice(slice.as_slice_like());
-            let element_count = element_slice.len();
             let alloc_result = self
                 .allocate_array_uninitialized::<<T as SliceLike>::Element>(
-                    element_count,
+                    element_slice.len(),
                 );
             alloc_result.map(|allocation| {
                 let data = &mut *allocation.data.as_ptr();
                 forget(allocation);
-                ptr::copy_nonoverlapping(
-                    element_slice.as_ptr(),
-                    data.as_mut_ptr(),
-                    element_count,
-                );
+
+                data.copy_from_slice(&element_slice[..]);
 
                 Allocation {
                     data: NonNull::new_unchecked(
