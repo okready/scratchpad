@@ -288,11 +288,14 @@ pub trait Marker {
                 Ok(allocation) => {
                     let data = &mut *allocation.data.as_ptr();
                     forget(allocation);
+
+                    debug_assert_eq!(data.len(), element_count);
                     ptr::copy_nonoverlapping(
                         element_slice.as_ptr(),
                         data.as_mut_ptr(),
                         element_count,
                     );
+
                     <U as SliceSource<T>>::drop_container(values);
 
                     Ok(Allocation {
