@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - `SliceSource` implementations for borrowed references to arrays of `Copy`
   types.
 
-### Changes
+### Changed
 - Modified `Marker` allocate, extend, and slice concatenate methods that clone
   or copy from slices to allow for more general slice inputs by way of a new
   trait, `AsSliceLike`, allowing references to scalars, arrays, or any
