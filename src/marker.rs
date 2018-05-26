@@ -13,7 +13,7 @@ use core::slice;
 
 use super::{
     Allocation, AsSliceLike, Buffer, ConcatenateSlice, Error, ErrorKind,
-    IntoSliceAllocation, OwnedSlice, Scratchpad, SliceLike, Tracking,
+    IntoSliceAllocation, Scratchpad, SliceLike, SliceSource, Tracking,
 };
 use core::marker::PhantomData;
 use core::mem::{align_of, forget, size_of};
@@ -274,7 +274,7 @@ pub trait Marker {
     ) -> Result<Allocation<'marker, T>, Error<(U,)>>
     where
         T: SliceLike + ?Sized,
-        U: OwnedSlice<T>,
+        U: SliceSource<T>,
     {
         unsafe {
             let element_slice = (*values.as_slice_ptr()).as_element_slice();
@@ -293,7 +293,7 @@ pub trait Marker {
                         data.as_mut_ptr(),
                         element_count,
                     );
-                    <U as OwnedSlice<T>>::drop_container(values);
+                    <U as SliceSource<T>>::drop_container(values);
 
                     Ok(Allocation {
                         data: NonNull::new_unchecked(
@@ -454,7 +454,7 @@ pub trait Marker {
         T: ConcatenateSlice + ?Sized,
         U: ?Sized,
         Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
-        V: OwnedSlice<T>,
+        V: SliceSource<T>,
     {
         // Verify that the allocation is at the end of the marker.
         if !self.is_allocation_at_end(&allocation) {
@@ -1134,7 +1134,7 @@ where
     ) -> Result<Allocation<'marker, T>, Error<(U,)>>
     where
         T: SliceLike + ?Sized,
-        U: OwnedSlice<T>,
+        U: SliceSource<T>,
     {
         Marker::allocate_slice(self, values)
     }
@@ -1238,7 +1238,7 @@ where
         T: ConcatenateSlice + ?Sized,
         U: ?Sized,
         Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
-        V: OwnedSlice<T>,
+        V: SliceSource<T>,
     {
         Marker::extend(self, allocation, values)
     }
@@ -1771,7 +1771,7 @@ where
     ) -> Result<Allocation<'marker, T>, Error<(U,)>>
     where
         T: SliceLike + ?Sized,
-        U: OwnedSlice<T>,
+        U: SliceSource<T>,
     {
         Marker::allocate_slice(self, values)
     }
@@ -1875,7 +1875,7 @@ where
         T: ConcatenateSlice + ?Sized,
         U: ?Sized,
         Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
-        V: OwnedSlice<T>,
+        V: SliceSource<T>,
     {
         Marker::extend(self, allocation, values)
     }

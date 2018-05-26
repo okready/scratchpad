@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   the slice allocation and concatenation methods, and their implementations
   can now make use of the corresponding slice allocation methods to reduce
   redundant code.
+- Renamed the `OwnedSlice` trait to `SliceSource` to avoid confusion (the name
+  `OwnedSlice` implies ownership of the slice data, but we also implement it
+  for a subset of borrowed reference types so that `Copy` types to be used
+  with non-copy `Marker` functions).
 
 ### Removed
 - Unnecessary generic parameters.

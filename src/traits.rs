@@ -689,7 +689,7 @@ where
 /// they can be copied out as well without side-effects.
 ///
 /// [`Copy`]: https://doc.rust-lang.org/std/marker/trait.Copy.html
-pub trait OwnedSlice<T>: Sized
+pub trait SliceSource<T>: Sized
 where
     T: SliceLike + ?Sized,
 {
@@ -728,7 +728,7 @@ where
     fn drop_container(container: Self);
 }
 
-impl<T> OwnedSlice<[T]> for T {
+impl<T> SliceSource<[T]> for T {
     #[inline]
     fn as_slice_ptr(&self) -> *const [T] {
         unsafe { slice::from_raw_parts(self, 1) }
@@ -740,7 +740,7 @@ impl<T> OwnedSlice<[T]> for T {
     }
 }
 
-impl<'a, T> OwnedSlice<[T]> for &'a T
+impl<'a, T> SliceSource<[T]> for &'a T
 where
     T: Copy,
 {
@@ -753,7 +753,7 @@ where
     fn drop_container(_container: Self) {}
 }
 
-impl<'a, T, U> OwnedSlice<T> for &'a T
+impl<'a, T, U> SliceSource<T> for &'a T
 where
     T: SliceLike<Element = U> + ?Sized,
     U: Copy,
@@ -768,7 +768,7 @@ where
 }
 
 #[cfg(any(feature = "std", feature = "unstable"))]
-impl<T> OwnedSlice<[T]> for Box<T> {
+impl<T> SliceSource<[T]> for Box<T> {
     #[inline]
     fn as_slice_ptr(&self) -> *const [T] {
         unsafe { slice::from_raw_parts(&**self, 1) }
@@ -783,7 +783,7 @@ impl<T> OwnedSlice<[T]> for Box<T> {
 }
 
 #[cfg(any(feature = "std", feature = "unstable"))]
-impl<T> OwnedSlice<T> for Box<T>
+impl<T> SliceSource<T> for Box<T>
 where
     T: SliceLike + ?Sized,
 {
@@ -803,7 +803,7 @@ where
 }
 
 #[cfg(any(feature = "std", feature = "unstable"))]
-impl<'a, T> OwnedSlice<[T]> for &'a Box<T>
+impl<'a, T> SliceSource<[T]> for &'a Box<T>
 where
     T: Copy,
 {
@@ -817,7 +817,7 @@ where
 }
 
 #[cfg(any(feature = "std", feature = "unstable"))]
-impl<'a, T, U> OwnedSlice<T> for &'a Box<T>
+impl<'a, T, U> SliceSource<T> for &'a Box<T>
 where
     T: SliceLike<Element = U> + ?Sized,
     U: Copy,
@@ -832,7 +832,7 @@ where
 }
 
 #[cfg(any(feature = "std", feature = "unstable"))]
-impl<T> OwnedSlice<[T]> for Vec<T> {
+impl<T> SliceSource<[T]> for Vec<T> {
     #[inline]
     fn as_slice_ptr(&self) -> *const [T] {
         &**self
@@ -851,7 +851,7 @@ impl<T> OwnedSlice<[T]> for Vec<T> {
 }
 
 #[cfg(any(feature = "std", feature = "unstable"))]
-impl<'a, T> OwnedSlice<[T]> for &'a Vec<T>
+impl<'a, T> SliceSource<[T]> for &'a Vec<T>
 where
     T: Copy,
 {
@@ -921,7 +921,7 @@ macro_rules! generate_array_trait_impls {
             }
         }
 
-        impl<T> OwnedSlice<[T]> for [T; $size] {
+        impl<T> SliceSource<[T]> for [T; $size] {
             #[inline]
             fn as_slice_ptr(&self) -> *const [T] {
                 &self[..]
@@ -934,7 +934,7 @@ macro_rules! generate_array_trait_impls {
         }
 
         #[cfg(any(feature = "std", feature = "unstable"))]
-        impl<T> OwnedSlice<[T]> for Box<[T; $size]> {
+        impl<T> SliceSource<[T]> for Box<[T; $size]> {
             #[inline]
             fn as_slice_ptr(&self) -> *const [T] {
                 &self[..]
