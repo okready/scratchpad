@@ -385,6 +385,61 @@ pub trait ConcatenateSlice: SliceLike {}
 impl<T> ConcatenateSlice for [T] {}
 impl ConcatenateSlice for str {}
 
+/// Trait for types that can be safely read as a [`SliceLike`] reference.
+///
+/// This allows non-slice types such as scalars and arrays to be interpreted
+/// as slices for operations that expect a slice as input (e.g.
+/// [`Marker::allocate_slice_clone()`]).
+///
+/// [`Marker::allocate_slice_clone()`]: trait.Marker.html#method.allocate_slice_clone
+/// [`SliceLike`]: trait.SliceLike.html
+pub trait AsSliceLike<T>
+where
+    T: SliceLike + ?Sized,
+{
+    /// Returns a [`SliceLike`] reference to this object's data.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::AsSliceLike;
+    ///
+    /// // `value` is an `f64`...
+    /// let value = 3.14159;
+    ///
+    /// // ...but `value_slice` is an `&[f64]`...
+    /// let value_slice = value.as_slice_like();
+    /// assert_eq!(value_slice.len(), 1);
+    /// assert_eq!(value_slice[0], 3.14159);
+    ///
+    /// // ...that references the same memory as `value`.
+    /// assert!(std::ptr::eq(&value, &value_slice[0]));
+    /// ```
+    ///
+    /// [`SliceLike`]: trait.SliceLike.html
+    fn as_slice_like(&self) -> &T;
+}
+
+impl<T> AsSliceLike<T> for T
+where
+    T: SliceLike + ?Sized,
+{
+    #[inline]
+    fn as_slice_like(&self) -> &T {
+        self
+    }
+}
+
+impl<T> AsSliceLike<[T]> for T
+where
+    T: Sized,
+{
+    #[inline]
+    fn as_slice_like(&self) -> &[T] {
+        unsafe { slice::from_raw_parts(self, 1) }
+    }
+}
+
 /// Trait for safely converting an [`Allocation`] of a given type into a slice
 /// allocation without losing or altering any of the allocation data.
 ///
@@ -853,6 +908,16 @@ macro_rules! generate_array_trait_impls {
             #[inline]
             fn as_mut_slice_ptr(&mut self) -> *mut [T] {
                 unsafe { &mut (*self.data.as_mut())[..] }
+            }
+        }
+
+        impl<T> AsSliceLike<[T]> for [T; $size]
+        where
+            T: Sized,
+        {
+            #[inline]
+            fn as_slice_like(&self) -> &[T] {
+                &self[..]
             }
         }
 
