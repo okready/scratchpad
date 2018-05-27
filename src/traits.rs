@@ -8,6 +8,7 @@
 
 //! Support traits.
 
+use core::ptr;
 use core::slice;
 use core::str;
 
@@ -385,61 +386,6 @@ pub trait ConcatenateSlice: SliceLike {}
 impl<T> ConcatenateSlice for [T] {}
 impl ConcatenateSlice for str {}
 
-/// Trait for types that can be safely read as a [`SliceLike`] reference.
-///
-/// This allows non-slice types such as scalars and arrays to be interpreted
-/// as slices for operations that expect a slice as input (e.g.
-/// [`Marker::allocate_slice_clone()`]).
-///
-/// [`Marker::allocate_slice_clone()`]: trait.Marker.html#method.allocate_slice_clone
-/// [`SliceLike`]: trait.SliceLike.html
-pub trait AsSliceLike<T>
-where
-    T: SliceLike + ?Sized,
-{
-    /// Returns a [`SliceLike`] reference to this object's data.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use scratchpad::AsSliceLike;
-    ///
-    /// // `value` is an `f64`...
-    /// let value = 3.14159;
-    ///
-    /// // ...but `value_slice` is an `&[f64]`...
-    /// let value_slice = value.as_slice_like();
-    /// assert_eq!(value_slice.len(), 1);
-    /// assert_eq!(value_slice[0], 3.14159);
-    ///
-    /// // ...that references the same memory as `value`.
-    /// assert!(std::ptr::eq(&value, &value_slice[0]));
-    /// ```
-    ///
-    /// [`SliceLike`]: trait.SliceLike.html
-    fn as_slice_like(&self) -> &T;
-}
-
-impl<T> AsSliceLike<T> for T
-where
-    T: SliceLike + ?Sized,
-{
-    #[inline]
-    fn as_slice_like(&self) -> &T {
-        self
-    }
-}
-
-impl<T> AsSliceLike<[T]> for T
-where
-    T: Sized,
-{
-    #[inline]
-    fn as_slice_like(&self) -> &[T] {
-        unsafe { slice::from_raw_parts(self, 1) }
-    }
-}
-
 /// Trait for safely converting an [`Allocation`] of a given type into a slice
 /// allocation without losing or altering any of the allocation data.
 ///
@@ -514,12 +460,13 @@ where
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::{IntoSliceAllocation, Scratchpad};
+    /// use scratchpad::{Allocation, IntoSliceAllocation, Scratchpad};
     ///
     /// let scratchpad = Scratchpad::<[u8; 32], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_front().unwrap();
     ///
-    /// let message = marker.allocate_slice_copy("foo").unwrap();
+    /// let message: Allocation<str> = marker.allocate_slice_copy("foo")
+    ///     .unwrap();
     /// assert_eq!(&*message, "foo");
     ///
     /// // Calling `into_element_slice_allocation()` on a `&str` allocation
@@ -682,103 +629,103 @@ where
     }
 }
 
-/// Trait for types containing ranges of values that can be safely moved out
-/// while consuming the original container type.
+/// Trait for sources of slice data provided to [`Marker`] trait methods.
 ///
-/// Note that this is also implemented for references to [`Copy`] types, as
-/// they can be copied out as well without side-effects.
+/// Slices can be generated from scalar values and arrays as well as other
+/// slices. If either the `std` or `unstable` features are enabled, [`Box`]
+/// and [`Vec`] can be used as slice sources as well.
 ///
-/// [`Copy`]: https://doc.rust-lang.org/std/marker/trait.Copy.html
-pub trait SliceSource<T>: Sized
+/// `SliceSource` on its own is only usable for `Clone` and `Copy` data
+/// sources. For move operations, the [`SliceMoveSource`] subtrait provides
+/// additional functionality for moving slices out of supported types.
+///
+/// [`Box`]: https://doc.rust-lang.org/std/boxed/struct.Box.html
+/// [`Marker`]: trait.Marker.html
+/// [`SliceMoveSource`]: trait.SliceMoveSource.html
+/// [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
+pub trait SliceSource<T>
 where
     T: SliceLike + ?Sized,
 {
-    /// Returns the owned values as a slice reference.
-    #[inline]
-    fn as_slice(&self) -> &T {
-        unsafe { &*self.as_slice_ptr() }
+    /// Returns a [`SliceLike`] reference to this object's data.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::SliceSource;
+    ///
+    /// // `value` is an `f64`...
+    /// let value = 3.14159;
+    ///
+    /// // ...but `value_slice` is a `&[f64]`...
+    /// let value_slice = value.as_slice_like();
+    /// assert_eq!(value_slice.len(), 1);
+    /// assert_eq!(value_slice[0], 3.14159);
+    ///
+    /// // ...that references the same memory as `value`.
+    /// assert!(std::ptr::eq(&value, &value_slice[0]));
+    /// ```
+    ///
+    /// [`SliceLike`]: trait.SliceLike.html
+    fn as_slice_like(&self) -> &T;
+
+    /// Returns a [`SliceLike`] pointer to this object's data.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::SliceSource;
+    ///
+    /// // `value` is an `f64`...
+    /// let value = 3.14159;
+    ///
+    /// unsafe {
+    ///     // ...but `value_slice_ptr` is a `*const [f64]`...
+    ///     let value_slice_ptr = value.as_slice_like_ptr();
+    ///     assert_eq!((*value_slice_ptr).len(), 1);
+    ///     assert_eq!((*value_slice_ptr)[0], 3.14159);
+    ///
+    ///     // ...that references the same memory as `value`.
+    ///     assert!(std::ptr::eq(&value, &(*value_slice_ptr)[0]));
+    /// }
+    /// ```
+    ///
+    /// [`SliceLike`]: trait.SliceLike.html
+    #[inline(always)]
+    fn as_slice_like_ptr(&self) -> *const T {
+        self.as_slice_like()
     }
-
-    /// Returns the owned values as a slice pointer.
-    ///
-    /// Functions such as [`MarkerFront::append()`] and
-    /// [`MarkerBack::prepend()`] will perform a bitwise-copy of the data
-    /// returned by this function into their allocations before calling
-    /// [`drop_container()`]. Implementations only need to return the data
-    /// that should be read for moving.
-    ///
-    /// [`drop_container()`]: #method.drop_container
-    /// [`MarkerBack::prepend()`]: struct.MarkerBack.html#method.prepend
-    /// [`MarkerFront::append()`]: struct.MarkerFront.html#method.append
-    fn as_slice_ptr(&self) -> *const T;
-
-    /// Consumes the container type without dropping the contained elements
-    /// themselves.
-    ///
-    /// This is called after functions such as [`MarkerFront::append()`] and
-    /// [`MarkerBack::prepend()`] have already moved values into their own
-    /// allocations. The container type should free any allocated memory or
-    /// other resources, including any memory allocated for storage of the
-    /// contained values, without calling the [`Drop`] implementation of those
-    /// values.
-    ///
-    /// [`MarkerBack::prepend()`]: struct.MarkerBack.html#method.prepend
-    /// [`MarkerFront::append()`]: struct.MarkerFront.html#method.append
-    /// [`Drop`]: https://doc.rust-lang.org/std/ops/trait.Drop.html
-    fn drop_container(container: Self);
 }
 
 impl<T> SliceSource<[T]> for T {
     #[inline]
-    fn as_slice_ptr(&self) -> *const [T] {
+    fn as_slice_like(&self) -> &[T] {
         unsafe { slice::from_raw_parts(self, 1) }
     }
-
-    #[inline]
-    fn drop_container(container: Self) {
-        forget(container);
-    }
 }
 
-impl<'a, T> SliceSource<[T]> for &'a T
-where
-    T: Copy,
-{
+impl<'a, T> SliceSource<[T]> for &'a T {
     #[inline]
-    fn as_slice_ptr(&self) -> *const [T] {
+    fn as_slice_like(&self) -> &[T] {
         unsafe { slice::from_raw_parts(*self, 1) }
     }
-
-    #[inline]
-    fn drop_container(_container: Self) {}
 }
 
-impl<'a, T, U> SliceSource<T> for &'a T
+impl<'a, T> SliceSource<T> for &'a T
 where
-    T: SliceLike<Element = U> + ?Sized,
-    U: Copy,
+    T: SliceLike + ?Sized,
 {
     #[inline]
-    fn as_slice_ptr(&self) -> *const T {
+    fn as_slice_like(&self) -> &T {
         *self
     }
-
-    #[inline]
-    fn drop_container(_container: Self) {}
 }
 
 #[cfg(any(feature = "std", feature = "unstable"))]
 impl<T> SliceSource<[T]> for Box<T> {
     #[inline]
-    fn as_slice_ptr(&self) -> *const [T] {
+    fn as_slice_like(&self) -> &[T] {
         unsafe { slice::from_raw_parts(&**self, 1) }
-    }
-
-    #[inline]
-    fn drop_container(container: Self) {
-        unsafe {
-            Box::from_raw(Box::into_raw(container) as *mut ManuallyDrop<T>);
-        }
     }
 }
 
@@ -788,14 +735,142 @@ where
     T: SliceLike + ?Sized,
 {
     #[inline]
-    fn as_slice_ptr(&self) -> *const T {
+    fn as_slice_like(&self) -> &T {
         &**self
     }
+}
 
+#[cfg(any(feature = "std", feature = "unstable"))]
+impl<'a, T> SliceSource<[T]> for &'a Box<T> {
     #[inline]
-    fn drop_container(container: Self) {
+    fn as_slice_like(&self) -> &[T] {
+        unsafe { slice::from_raw_parts(&***self, 1) }
+    }
+}
+
+#[cfg(any(feature = "std", feature = "unstable"))]
+impl<'a, T> SliceSource<T> for &'a Box<T>
+where
+    T: SliceLike + ?Sized,
+{
+    #[inline]
+    fn as_slice_like(&self) -> &T {
+        &***self
+    }
+}
+
+#[cfg(any(feature = "std", feature = "unstable"))]
+impl<T> SliceSource<[T]> for Vec<T> {
+    #[inline]
+    fn as_slice_like(&self) -> &[T] {
+        &**self
+    }
+}
+
+#[cfg(any(feature = "std", feature = "unstable"))]
+impl<'a, T> SliceSource<[T]> for &'a Vec<T> {
+    #[inline]
+    fn as_slice_like(&self) -> &[T] {
+        &***self
+    }
+}
+
+/// Subtrait of [`SliceSource`] for taking ownership of the contents of a
+/// slice.
+///
+/// [`SliceSource`]: trait.SliceSource.html
+pub trait SliceMoveSource<T>: SliceSource<T>
+where
+    T: SliceLike + ?Sized,
+{
+    /// Calls a closure for each item in this source, consuming the source.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::SliceMoveSource;
+    ///
+    /// fn move_to_vec<T: SliceMoveSource<[i32]>>(source: T) -> Vec<i32> {
+    ///     let mut out = Vec::new();
+    ///     source.move_elements(|x| out.push(x));
+    ///     out
+    /// }
+    ///
+    /// let values = [5, 6, 7, 8];
+    /// let out = move_to_vec([5, 6, 7, 8]);
+    /// assert_eq!(*out, [5, 6, 7, 8]);
+    /// ```
+    fn move_elements<F>(self, f: F)
+    where
+        Self: Sized,
+        F: FnMut(<T as SliceLike>::Element);
+}
+
+impl<T> SliceMoveSource<[T]> for T {
+    fn move_elements<F>(self, mut f: F)
+    where
+        F: FnMut(T),
+    {
+        f(self)
+    }
+}
+
+impl<'a, T> SliceMoveSource<[T]> for &'a T
+where
+    T: Copy,
+{
+    fn move_elements<F>(self, mut f: F)
+    where
+        F: FnMut(T),
+    {
+        f(*self)
+    }
+}
+
+impl<'a, T> SliceMoveSource<T> for &'a T
+where
+    T: SliceLike + ?Sized,
+    <T as SliceLike>::Element: Copy,
+{
+    fn move_elements<F>(self, mut f: F)
+    where
+        F: FnMut(<T as SliceLike>::Element),
+    {
+        for item in self.as_element_slice() {
+            f(*item)
+        }
+    }
+}
+
+#[cfg(any(feature = "std", feature = "unstable"))]
+impl<T> SliceMoveSource<[T]> for Box<T> {
+    fn move_elements<F>(self, mut f: F)
+    where
+        F: FnMut(T),
+    {
         unsafe {
-            Box::from_raw((*Box::into_raw(container)).as_element_slice_mut()
+            let data_ptr = Box::into_raw(self);
+            f(ptr::read(data_ptr));
+            Box::from_raw(data_ptr as *mut ManuallyDrop<T>);
+        }
+    }
+}
+
+#[cfg(any(feature = "std", feature = "unstable"))]
+impl<T> SliceMoveSource<T> for Box<T>
+where
+    T: SliceLike + ?Sized,
+{
+    fn move_elements<F>(self, mut f: F)
+    where
+        F: FnMut(<T as SliceLike>::Element),
+    {
+        unsafe {
+            for item in (*self).as_element_slice() {
+                f(ptr::read(item));
+            }
+
+            Box::from_raw((*Box::into_raw(self)).as_element_slice_mut()
                 as *mut [<T as SliceLike>::Element]
                 as *mut [ManuallyDrop<<T as SliceLike>::Element>]);
         }
@@ -803,66 +878,211 @@ where
 }
 
 #[cfg(any(feature = "std", feature = "unstable"))]
-impl<'a, T> SliceSource<[T]> for &'a Box<T>
+impl<'a, T> SliceMoveSource<[T]> for &'a Box<T>
 where
     T: Copy,
 {
-    #[inline]
-    fn as_slice_ptr(&self) -> *const [T] {
-        unsafe { slice::from_raw_parts(&***self, 1) }
+    fn move_elements<F>(self, mut f: F)
+    where
+        F: FnMut(T),
+    {
+        f(**self);
     }
-
-    #[inline]
-    fn drop_container(_container: Self) {}
 }
 
 #[cfg(any(feature = "std", feature = "unstable"))]
-impl<'a, T, U> SliceSource<T> for &'a Box<T>
+impl<'a, T> SliceMoveSource<T> for &'a Box<T>
 where
-    T: SliceLike<Element = U> + ?Sized,
-    U: Copy,
+    T: SliceLike + ?Sized,
+    <T as SliceLike>::Element: Copy,
 {
-    #[inline]
-    fn as_slice_ptr(&self) -> *const T {
-        &***self
-    }
-
-    #[inline]
-    fn drop_container(_container: Self) {}
-}
-
-#[cfg(any(feature = "std", feature = "unstable"))]
-impl<T> SliceSource<[T]> for Vec<T> {
-    #[inline]
-    fn as_slice_ptr(&self) -> *const [T] {
-        &**self
-    }
-
-    #[inline]
-    fn drop_container(mut container: Self) {
-        let ptr = container.as_mut_ptr();
-        let len = container.len();
-        let capacity = container.capacity();
-        forget(container);
-        unsafe {
-            Vec::from_raw_parts(ptr as *mut ManuallyDrop<T>, len, capacity);
+    fn move_elements<F>(self, mut f: F)
+    where
+        F: FnMut(<T as SliceLike>::Element),
+    {
+        for item in (*self).as_element_slice() {
+            f(*item);
         }
     }
 }
 
 #[cfg(any(feature = "std", feature = "unstable"))]
-impl<'a, T> SliceSource<[T]> for &'a Vec<T>
+impl<T> SliceMoveSource<[T]> for Vec<T> {
+    fn move_elements<F>(self, mut f: F)
+    where
+        F: FnMut(T),
+    {
+        for item in self {
+            f(item);
+        }
+    }
+}
+
+#[cfg(any(feature = "std", feature = "unstable"))]
+impl<'a, T> SliceMoveSource<[T]> for &'a Vec<T>
 where
     T: Copy,
 {
-    #[inline]
-    fn as_slice_ptr(&self) -> *const [T] {
-        &***self
+    fn move_elements<F>(self, mut f: F)
+    where
+        F: FnMut(T),
+    {
+        for item in self {
+            f(*item);
+        }
     }
-
-    #[inline]
-    fn drop_container(_container: Self) {}
 }
+
+/// Trait for generic access to collections of [`SliceSource`] objects.
+///
+/// [`SliceSource`]: trait.SliceSource.html
+pub trait SliceSourceCollection<T>
+where
+    T: SliceLike + ?Sized,
+{
+    /// Calls a closure for each [`SliceSource`] in this collection.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::{SliceLike, SliceSourceCollection};
+    ///
+    /// let collection = ([1, 2, 3], 4, [5, 6]);
+    ///
+    /// let mut out = Vec::new();
+    /// collection.for_each(|source| {
+    ///     for x in source.as_slice_like().as_element_slice() {
+    ///         out.push(*x * 2);
+    ///     }
+    /// });
+    /// assert_eq!(*out, [2, 4, 6, 8, 10, 12]);
+    /// ```
+    ///
+    /// [`SliceSource`]: trait.SliceSource.html
+    fn for_each<F>(&self, f: F)
+    where
+        F: for<'a> FnMut(&'a SliceSource<T>);
+}
+
+/// Subtrait of [`SliceSourceCollection`] for taking ownership of the contents
+/// of a collection of slice sources.
+///
+/// [`SliceSourceCollection`]: trait.SliceSourceCollection.html
+pub trait SliceMoveSourceCollection<T>: SliceSourceCollection<T>
+where
+    T: SliceLike + ?Sized,
+{
+    /// Calls a closure for each item in all [`SliceSource`] objects of this
+    /// collection in sequence, consuming the collection.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::SliceMoveSourceCollection;
+    ///
+    /// let collection = ([1, 2, 3], 4, [5, 6]);
+    ///
+    /// let mut out = Vec::new();
+    /// collection.move_all_elements(|x| out.push(x * 2));
+    /// assert_eq!(*out, [2, 4, 6, 8, 10, 12]);
+    /// ```
+    ///
+    /// [`SliceSource`]: trait.SliceSource.html
+    fn move_all_elements<F>(self, f: F)
+    where
+        Self: Sized,
+        F: FnMut(<T as SliceLike>::Element);
+}
+
+macro_rules! implement_slice_source_collection_for_tuples {
+    ($($name:ident,)+) => {
+        impl<T, $($name,)*> SliceSourceCollection<T> for ($($name,)*)
+        where
+            T: SliceLike + ?Sized,
+            $($name: SliceSource<T>,)*
+        {
+            #[allow(non_snake_case)]
+            fn for_each<F>(&self, mut f: F)
+            where
+                F: for<'a> FnMut(&'a SliceSource<T>)
+            {
+                let ($(ref $name,)*) = *self;
+                $(
+                    f($name);
+                )*
+            }
+        }
+
+        #[allow(non_snake_case)]
+        impl<'b, T, $($name,)*> SliceSourceCollection<T> for &'b ($($name,)*)
+        where
+            T: SliceLike + ?Sized,
+            $($name: SliceSource<T>,)*
+        {
+            #[allow(non_snake_case)]
+            fn for_each<F>(&self, mut f: F)
+            where
+                F: for<'a> FnMut(&'a SliceSource<T>)
+            {
+                let ($(ref $name,)*) = **self;
+                $(
+                    f($name);
+                )*
+            }
+        }
+
+        impl<T, $($name,)*> SliceMoveSourceCollection<T> for ($($name,)*)
+        where
+            T: SliceLike + ?Sized,
+            $($name: SliceMoveSource<T>,)*
+        {
+            #[allow(non_snake_case)]
+            fn move_all_elements<F>(self, mut f: F)
+            where
+                F: FnMut(<T as SliceLike>::Element),
+            {
+                let ($($name,)*) = self;
+                $(
+                    $name.move_elements(&mut f);
+                )*
+            }
+        }
+
+        #[allow(non_snake_case)]
+        impl<'b, T, $($name,)*> SliceMoveSourceCollection<T>
+            for &'b ($($name,)*)
+        where
+            T: SliceLike + ?Sized,
+            <T as SliceLike>::Element: Copy,
+            $($name: SliceSource<T>,)*
+        {
+            #[allow(non_snake_case)]
+            fn move_all_elements<F>(self, mut f: F)
+            where
+                F: FnMut(<T as SliceLike>::Element),
+            {
+                let ($(ref $name,)*) = *self;
+                $(
+                    for item in $name.as_slice_like().as_element_slice() {
+                        f(*item);
+                    }
+                )*
+            }
+        }
+
+        implement_slice_source_collection_for_tuples!([REDUCE] $($name,)*);
+    };
+
+    () => {};
+
+    ([REDUCE] $name:ident, $($remaining:ident,)*) => {
+        implement_slice_source_collection_for_tuples!($($remaining,)*);
+    }
+}
+
+implement_slice_source_collection_for_tuples!(
+    T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11,
+);
 
 /// Macro for generating trait implementations for static arrays.
 macro_rules! generate_array_trait_impls {
@@ -911,71 +1131,161 @@ macro_rules! generate_array_trait_impls {
             }
         }
 
-        impl<T> AsSliceLike<[T]> for [T; $size]
-        where
-            T: Sized,
-        {
+        impl<T> SliceSource<[T]> for [T; $size] {
             #[inline]
             fn as_slice_like(&self) -> &[T] {
                 &self[..]
             }
         }
 
-        impl<T> SliceSource<[T]> for [T; $size] {
+        impl<'a, T> SliceSource<[T]> for &'a [T; $size] {
             #[inline]
-            fn as_slice_ptr(&self) -> *const [T] {
+            fn as_slice_like(&self) -> &[T] {
                 &self[..]
             }
-
-            #[inline]
-            fn drop_container(container: Self) {
-                forget(container);
-            }
-        }
-
-        impl<'a, T> SliceSource<[T]> for &'a [T; $size]
-        where
-            T: Copy,
-        {
-            #[inline]
-            fn as_slice_ptr(&self) -> *const [T] {
-                &self[..]
-            }
-
-            #[inline]
-            fn drop_container(_container: Self) {}
         }
 
         #[cfg(any(feature = "std", feature = "unstable"))]
         impl<T> SliceSource<[T]> for Box<[T; $size]> {
             #[inline]
-            fn as_slice_ptr(&self) -> *const [T] {
+            fn as_slice_like(&self) -> &[T] {
                 &self[..]
             }
+        }
 
+        #[cfg(any(feature = "std", feature = "unstable"))]
+        impl<'a, T> SliceSource<[T]> for &'a Box<[T; $size]> {
             #[inline]
-            fn drop_container(container: Self) {
-                unsafe {
-                    Box::from_raw(
-                        Box::into_raw(container)
-                            as *mut ManuallyDrop<[T; $size]>,
-                    );
+            fn as_slice_like(&self) -> &[T] {
+                &self[..]
+            }
+        }
+
+        impl<T> SliceMoveSource<[T]> for [T; $size] {
+            fn move_elements<F>(self, mut f: F)
+            where
+                F: FnMut(T),
+            {
+                for item in &self[..] {
+                    unsafe {
+                        f(ptr::read(item));
+                    }
+                }
+
+                forget(self);
+            }
+        }
+
+        impl<'a, T> SliceMoveSource<[T]> for &'a [T; $size]
+        where
+            T: Copy,
+        {
+            fn move_elements<F>(self, mut f: F)
+            where
+                F: FnMut(T),
+            {
+                for item in &self[..] {
+                    f(*item);
                 }
             }
         }
 
         #[cfg(any(feature = "std", feature = "unstable"))]
-        impl<'a, T> SliceSource<[T]> for &'a Box<[T; $size]>
+        impl<T> SliceMoveSource<[T]> for Box<[T; $size]> {
+            fn move_elements<F>(self, mut f: F)
+            where
+                F: FnMut(T),
+            {
+                unsafe {
+                    for item in &self[..] {
+                        f(ptr::read(item));
+                    }
+
+                    Box::from_raw(Box::into_raw(self) as *mut ManuallyDrop<[T; $size]>);
+                }
+            }
+        }
+
+        #[cfg(any(feature = "std", feature = "unstable"))]
+        impl<'a, T> SliceMoveSource<[T]> for &'a Box<[T; $size]>
         where
             T: Copy,
         {
-            #[inline]
-            fn as_slice_ptr(&self) -> *const [T] {
-                &self[..]
+            fn move_elements<F>(self, mut f: F)
+            where
+                F: FnMut(T),
+            {
+                for item in &self[..] {
+                    f(*item);
+                }
             }
+        }
 
-            #[inline]
-            fn drop_container(_container: Self) {}
+        impl<T, U> SliceSourceCollection<T> for [U; $size]
+        where
+            T: SliceLike + ?Sized,
+            U: SliceSource<T>,
+        {
+            fn for_each<F>(&self, mut f: F)
+            where
+                F: for<'a> FnMut(&'a SliceSource<T>)
+            {
+                for index in 0..$size {
+                    f(&self[index]);
+                }
+            }
+        }
+
+        impl<'b, T, U> SliceSourceCollection<T> for &'b [U; $size]
+        where
+            T: SliceLike + ?Sized,
+            U: SliceSource<T>,
+        {
+            fn for_each<F>(&self, mut f: F)
+            where
+                F: for<'a> FnMut(&'a SliceSource<T>)
+            {
+                for index in 0..$size {
+                    f(&self[index]);
+                }
+            }
+        }
+
+        impl<T, U> SliceMoveSourceCollection<T> for [U; $size]
+        where
+            T: SliceLike + ?Sized,
+            U: SliceMoveSource<T>,
+        {
+            fn move_all_elements<F>(self, mut f: F)
+            where
+                F: FnMut(<T as SliceLike>::Element),
+            {
+                for source in &self[..] {
+                    unsafe {
+                        ptr::read(source).move_elements(&mut f);
+                    }
+                }
+
+                forget(self);
+            }
+        }
+
+        impl<'b, T, U> SliceMoveSourceCollection<T> for &'b [U; $size]
+        where
+            T: SliceLike + ?Sized,
+            <T as SliceLike>::Element: Copy,
+            U: SliceSource<T>,
+        {
+            fn move_all_elements<F>(self, mut f: F)
+            where
+                F: FnMut(<T as SliceLike>::Element),
+            {
+                for source in &self[..] {
+                    for item in source.as_slice_like().as_element_slice() {
+                        f(*item);
+                    }
+                }
+            }
         }
     };
 

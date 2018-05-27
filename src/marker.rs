@@ -12,8 +12,9 @@ use core::ptr;
 use core::slice;
 
 use super::{
-    Allocation, AsSliceLike, Buffer, ConcatenateSlice, Error, ErrorKind,
-    IntoSliceAllocation, Scratchpad, SliceLike, SliceSource, Tracking,
+    Allocation, Buffer, ConcatenateSlice, Error, ErrorKind,
+    IntoSliceAllocation, Scratchpad, SliceLike, SliceMoveSource, SliceSource,
+    SliceSourceCollection, Tracking,
 };
 use core::marker::PhantomData;
 use core::mem::{align_of, forget, size_of};
@@ -274,10 +275,11 @@ pub trait Marker {
     ) -> Result<Allocation<'marker, T>, Error<(U,)>>
     where
         T: SliceLike + ?Sized,
-        U: SliceSource<T>,
+        U: SliceMoveSource<T>,
     {
         unsafe {
-            let element_slice = (*values.as_slice_ptr()).as_element_slice();
+            let element_slice =
+                (*values.as_slice_like_ptr()).as_element_slice();
             let element_count = element_slice.len();
             let alloc_result = self
                 .allocate_array_uninitialized::<<T as SliceLike>::Element>(
@@ -287,16 +289,16 @@ pub trait Marker {
                 Err(e) => Err(e.map(|()| (values,))),
                 Ok(allocation) => {
                     let data = &mut *allocation.data.as_ptr();
+                    debug_assert_eq!(data.len(), element_count);
                     forget(allocation);
 
-                    debug_assert_eq!(data.len(), element_count);
-                    ptr::copy_nonoverlapping(
-                        element_slice.as_ptr(),
-                        data.as_mut_ptr(),
-                        element_count,
-                    );
+                    let mut index = 0;
+                    values.move_elements(|element| {
+                        ptr::write(&mut data[index], element);
+                        index += 1;
+                    });
 
-                    <U as SliceSource<T>>::drop_container(values);
+                    debug_assert_eq!(index, data.len());
 
                     Ok(Allocation {
                         data: NonNull::new_unchecked(
@@ -314,27 +316,28 @@ pub trait Marker {
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::Scratchpad;
+    /// use scratchpad::{Allocation, Scratchpad};
     ///
     /// let scratchpad = Scratchpad::<[u8; 32], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_front().unwrap();
     ///
     /// let message = "foo";
-    /// let allocation = marker.allocate_slice_clone(message).unwrap();
+    /// let allocation: Allocation<str> = marker.allocate_slice_clone(message)
+    ///     .unwrap();
     /// assert_eq!(&*allocation, "foo");
     /// ```
     fn allocate_slice_clone<'marker, T, U>(
         &'marker self,
-        slice: &U,
+        values: U,
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
         T: SliceLike + ?Sized,
         <T as SliceLike>::Element: Clone,
-        U: AsSliceLike<T> + ?Sized,
+        U: SliceSource<T>,
     {
         unsafe {
             let element_slice =
-                <T as SliceLike>::as_element_slice(slice.as_slice_like());
+                <T as SliceLike>::as_element_slice(values.as_slice_like());
             let element_count = element_slice.len();
             let alloc_result = self
                 .allocate_array_with::<<T as SliceLike>::Element, _>(
@@ -361,27 +364,28 @@ pub trait Marker {
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::Scratchpad;
+    /// use scratchpad::{Allocation, Scratchpad};
     ///
     /// let scratchpad = Scratchpad::<[u8; 32], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_front().unwrap();
     ///
     /// let message = "foo";
-    /// let allocation = marker.allocate_slice_copy(message).unwrap();
+    /// let allocation: Allocation<str> = marker.allocate_slice_copy(message)
+    ///     .unwrap();
     /// assert_eq!(&*allocation, "foo");
     /// ```
     fn allocate_slice_copy<'marker, T, U>(
         &'marker self,
-        slice: &U,
+        values: U,
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
         T: SliceLike + ?Sized,
         <T as SliceLike>::Element: Copy,
-        U: AsSliceLike<T> + ?Sized,
+        U: SliceSource<T>,
     {
         unsafe {
             let element_slice =
-                <T as SliceLike>::as_element_slice(slice.as_slice_like());
+                <T as SliceLike>::as_element_slice(values.as_slice_like());
             let alloc_result = self
                 .allocate_array_uninitialized::<<T as SliceLike>::Element>(
                     element_slice.len(),
@@ -390,6 +394,9 @@ pub trait Marker {
                 let data = &mut *allocation.data.as_ptr();
                 forget(allocation);
 
+                // Objects implementing `Copy` are not allowed to have `Drop`
+                // implementations, so there should be no side-effects from
+                // copying into uninitialized memory.
                 data.copy_from_slice(&element_slice[..]);
 
                 Allocation {
@@ -453,7 +460,7 @@ pub trait Marker {
         T: ConcatenateSlice + ?Sized,
         U: ?Sized,
         Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
-        V: SliceSource<T>,
+        V: SliceMoveSource<T>,
     {
         // Verify that the allocation is at the end of the marker.
         if !self.is_allocation_at_end(&allocation) {
@@ -517,14 +524,14 @@ pub trait Marker {
     fn extend_clone<'marker, T, U, V>(
         &'marker self,
         allocation: Allocation<'marker, U>,
-        slice: &V,
+        values: V,
     ) -> Result<Allocation<'marker, T>, Error<(Allocation<'marker, U>,)>>
     where
         T: ConcatenateSlice + ?Sized,
         <T as SliceLike>::Element: Clone,
         U: ?Sized,
         Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
-        V: AsSliceLike<T> + ?Sized,
+        V: SliceSource<T>,
     {
         // Verify that the allocation is at the end of the marker.
         if !self.is_allocation_at_end(&allocation) {
@@ -533,7 +540,7 @@ pub trait Marker {
 
         // Create a new allocation for the value given and merge the two
         // allocations. This will also perform all remaining validity checks.
-        match self.allocate_slice_clone::<T, V>(slice) {
+        match self.allocate_slice_clone::<T, V>(values) {
             Err(e) => Err(e.map(|()| (allocation,))),
             Ok(val_alloc) => unsafe {
                 Ok(Self::concat_allocations_unchecked::<T, U, T>(
@@ -588,14 +595,14 @@ pub trait Marker {
     fn extend_copy<'marker, T, U, V>(
         &'marker self,
         allocation: Allocation<'marker, U>,
-        slice: &V,
+        values: V,
     ) -> Result<Allocation<'marker, T>, Error<(Allocation<'marker, U>,)>>
     where
         T: ConcatenateSlice + ?Sized,
         <T as SliceLike>::Element: Copy,
         U: ?Sized,
         Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
-        V: AsSliceLike<T> + ?Sized,
+        V: SliceSource<T>,
     {
         // Verify that the allocation is at the end of the marker.
         if !self.is_allocation_at_end(&allocation) {
@@ -604,7 +611,7 @@ pub trait Marker {
 
         // Create a new allocation for the value given and merge the two
         // allocations. This will also perform all remaining validity checks.
-        match self.allocate_slice_copy::<T, V>(slice) {
+        match self.allocate_slice_copy::<T, V>(values) {
             Err(e) => Err(e.map(|()| (allocation,))),
             Ok(val_alloc) => unsafe {
                 Ok(Self::concat_allocations_unchecked::<T, U, T>(
@@ -620,27 +627,29 @@ pub trait Marker {
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::Scratchpad;
+    /// use scratchpad::{Allocation, Scratchpad};
     ///
     /// let scratchpad = Scratchpad::<[u8; 16], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_front().unwrap();
     ///
-    /// let combined = marker.concat_slices_clone(&["Hello,", " world", "!"])
-    ///     .unwrap();
+    /// let combined: Allocation<str> = marker.concat_slices_clone(
+    ///     ("Hello,", " world", "!")
+    /// ).unwrap();
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     fn concat_slices_clone<'marker, T, U>(
         &'marker self,
-        slices: &[&U],
+        values: U,
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
         T: ConcatenateSlice + ?Sized,
         <T as SliceLike>::Element: Clone,
-        U: AsSliceLike<T> + ?Sized,
+        U: SliceSourceCollection<T>,
     {
         unsafe {
-            let len = slices.iter().fold(0usize, |sum, &item| {
-                sum + item.as_slice_like().as_element_slice().len()
+            let mut len = 0;
+            values.for_each(|item| {
+                len += item.as_slice_like().as_element_slice().len();
             });
 
             let mut allocation = self
@@ -648,12 +657,12 @@ pub trait Marker {
                     len,
                 )?;
             let mut index = 0;
-            for &item in slices {
+            values.for_each(|item| {
                 for element in item.as_slice_like().as_element_slice() {
                     ptr::write(&mut allocation[index], element.clone());
                     index += 1;
                 }
-            }
+            });
 
             debug_assert_eq!(index, len);
 
@@ -685,35 +694,43 @@ pub trait Marker {
     /// let scratchpad = Scratchpad::<[u8; 16], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_front().unwrap();
     ///
-    /// let combined = marker.concat_slices_copy(&["Hello,", " world", "!"])
-    ///     .unwrap();
+    /// let combined: Allocation<str> = marker.concat_slices_copy(
+    ///     ("Hello,", " world", "!")
+    /// ).unwrap();
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     fn concat_slices_copy<'marker, T, U>(
         &'marker self,
-        slices: &[&U],
+        values: U,
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
         T: ConcatenateSlice + ?Sized,
         <T as SliceLike>::Element: Copy,
-        U: AsSliceLike<T> + ?Sized,
+        U: SliceSourceCollection<T>,
     {
         unsafe {
-            let len = slices.iter().fold(0usize, |sum, &item| {
-                sum + item.as_slice_like().as_element_slice().len()
+            let mut len = 0;
+            values.for_each(|item| {
+                len += item.as_slice_like().as_element_slice().len();
             });
 
             let mut allocation = self
                 .allocate_array_uninitialized::<<T as SliceLike>::Element>(
                     len,
                 )?;
+
             let mut start = 0;
-            for &item in slices {
+            values.for_each(|item| {
                 let elements = item.as_slice_like().as_element_slice();
                 let end = start + elements.len();
+
+                // Objects implementing `Copy` are not allowed to have `Drop`
+                // implementations, so there should be no side-effects from
+                // copying into uninitialized memory.
                 allocation[start..end].copy_from_slice(elements);
+
                 start = end;
-            }
+            });
 
             debug_assert_eq!(start, len);
 
@@ -1133,7 +1150,7 @@ where
     ) -> Result<Allocation<'marker, T>, Error<(U,)>>
     where
         T: SliceLike + ?Sized,
-        U: SliceSource<T>,
+        U: SliceMoveSource<T>,
     {
         Marker::allocate_slice(self, values)
     }
@@ -1143,26 +1160,27 @@ where
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::Scratchpad;
+    /// use scratchpad::{Allocation, Scratchpad};
     ///
     /// let scratchpad = Scratchpad::<[u8; 32], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_front().unwrap();
     ///
     /// let message = "foo";
-    /// let allocation = marker.allocate_slice_clone(message).unwrap();
+    /// let allocation: Allocation<str> = marker.allocate_slice_clone(message)
+    ///     .unwrap();
     /// assert_eq!(&*allocation, "foo");
     /// ```
     #[inline(always)]
     pub fn allocate_slice_clone<'marker, T, U>(
         &'marker self,
-        slice: &U,
+        values: U,
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
         T: SliceLike + ?Sized,
         <T as SliceLike>::Element: Clone,
-        U: AsSliceLike<T> + ?Sized,
+        U: SliceSource<T>,
     {
-        Marker::allocate_slice_clone(self, slice)
+        Marker::allocate_slice_clone(self, values)
     }
 
     /// Allocates a copy of a slice by performing a fast copy (equivalent to
@@ -1171,26 +1189,27 @@ where
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::Scratchpad;
+    /// use scratchpad::{Allocation, Scratchpad};
     ///
     /// let scratchpad = Scratchpad::<[u8; 32], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_front().unwrap();
     ///
     /// let message = "foo";
-    /// let allocation = marker.allocate_slice_copy(message).unwrap();
+    /// let allocation: Allocation<str> = marker.allocate_slice_copy(message)
+    ///     .unwrap();
     /// assert_eq!(&*allocation, "foo");
     /// ```
     #[inline(always)]
     pub fn allocate_slice_copy<'marker, T, U>(
         &'marker self,
-        slice: &U,
+        values: U,
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
         T: SliceLike + ?Sized,
         <T as SliceLike>::Element: Copy,
-        U: AsSliceLike<T> + ?Sized,
+        U: SliceSource<T>,
     {
-        Marker::allocate_slice_copy(self, slice)
+        Marker::allocate_slice_copy(self, values)
     }
 
     /// Extends an allocation by moving values onto its end, converting the
@@ -1237,7 +1256,7 @@ where
         T: ConcatenateSlice + ?Sized,
         U: ?Sized,
         Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
-        V: SliceSource<T>,
+        V: SliceMoveSource<T>,
     {
         Marker::extend(self, allocation, values)
     }
@@ -1280,16 +1299,16 @@ where
     pub fn append_clone<'marker, T, U, V>(
         &'marker self,
         allocation: Allocation<'marker, U>,
-        slice: &V,
+        values: V,
     ) -> Result<Allocation<'marker, T>, Error<(Allocation<'marker, U>,)>>
     where
         T: ConcatenateSlice + ?Sized,
         <T as SliceLike>::Element: Clone,
         U: ?Sized,
         Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
-        V: AsSliceLike<T> + ?Sized,
+        V: SliceSource<T>,
     {
-        Marker::extend_clone(self, allocation, slice)
+        Marker::extend_clone(self, allocation, values)
     }
 
     /// Extends an allocation by copying values onto its end, converting the
@@ -1330,16 +1349,16 @@ where
     pub fn append_copy<'marker, T, U, V>(
         &'marker self,
         allocation: Allocation<'marker, U>,
-        slice: &V,
+        values: V,
     ) -> Result<Allocation<'marker, T>, Error<(Allocation<'marker, U>,)>>
     where
         T: ConcatenateSlice + ?Sized,
         <T as SliceLike>::Element: Copy,
         U: ?Sized,
         Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
-        V: AsSliceLike<T> + ?Sized,
+        V: SliceSource<T>,
     {
-        Marker::extend_copy(self, allocation, slice)
+        Marker::extend_copy(self, allocation, values)
     }
 
     /// Combines cloned copies of each of the provided slices into a single
@@ -1348,26 +1367,27 @@ where
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::Scratchpad;
+    /// use scratchpad::{Allocation, Scratchpad};
     ///
     /// let scratchpad = Scratchpad::<[u8; 16], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_front().unwrap();
     ///
-    /// let combined = marker.concat_slices_clone(&["Hello,", " world", "!"])
-    ///     .unwrap();
+    /// let combined: Allocation<str> = marker.concat_slices_clone(
+    ///     ("Hello,", " world", "!")
+    /// ).unwrap();
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     #[inline(always)]
     pub fn concat_slices_clone<'marker, T, U>(
         &'marker self,
-        slices: &[&U],
+        values: U,
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
         T: ConcatenateSlice + ?Sized,
         <T as SliceLike>::Element: Clone,
-        U: AsSliceLike<T> + ?Sized,
+        U: SliceSourceCollection<T>,
     {
-        Marker::concat_slices_clone(self, slices)
+        Marker::concat_slices_clone(self, values)
     }
 
     /// Combines copies of each of the provided slices into a single slice
@@ -1379,26 +1399,27 @@ where
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::Scratchpad;
+    /// use scratchpad::{Allocation, Scratchpad};
     ///
     /// let scratchpad = Scratchpad::<[u8; 16], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_front().unwrap();
     ///
-    /// let combined = marker.concat_slices_copy(&["Hello,", " world", "!"])
-    ///     .unwrap();
+    /// let combined: Allocation<str> = marker.concat_slices_copy(
+    ///     ("Hello,", " world", "!")
+    /// ).unwrap();
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     #[inline(always)]
     pub fn concat_slices_copy<'marker, T, U>(
         &'marker self,
-        slices: &[&U],
+        values: U,
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
         T: ConcatenateSlice + ?Sized,
         <T as SliceLike>::Element: Copy,
-        U: AsSliceLike<T> + ?Sized,
+        U: SliceSourceCollection<T>,
     {
-        Marker::concat_slices_copy(self, slices)
+        Marker::concat_slices_copy(self, values)
     }
 }
 
@@ -1770,7 +1791,7 @@ where
     ) -> Result<Allocation<'marker, T>, Error<(U,)>>
     where
         T: SliceLike + ?Sized,
-        U: SliceSource<T>,
+        U: SliceMoveSource<T>,
     {
         Marker::allocate_slice(self, values)
     }
@@ -1780,26 +1801,27 @@ where
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::Scratchpad;
+    /// use scratchpad::{Allocation, Scratchpad};
     ///
     /// let scratchpad = Scratchpad::<[u8; 32], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_back().unwrap();
     ///
     /// let message = "foo";
-    /// let allocation = marker.allocate_slice_clone(message).unwrap();
+    /// let allocation: Allocation<str> = marker.allocate_slice_clone(message)
+    ///     .unwrap();
     /// assert_eq!(&*allocation, "foo");
     /// ```
     #[inline(always)]
     pub fn allocate_slice_clone<'marker, T, U>(
         &'marker self,
-        slice: &U,
+        values: U,
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
         T: SliceLike + ?Sized,
         <T as SliceLike>::Element: Clone,
-        U: AsSliceLike<T> + ?Sized,
+        U: SliceSource<T>,
     {
-        Marker::allocate_slice_clone(self, slice)
+        Marker::allocate_slice_clone(self, values)
     }
 
     /// Allocates a copy of a slice by performing a fast copy (equivalent to
@@ -1808,26 +1830,27 @@ where
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::Scratchpad;
+    /// use scratchpad::{Allocation, Scratchpad};
     ///
     /// let scratchpad = Scratchpad::<[u8; 32], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_back().unwrap();
     ///
     /// let message = "foo";
-    /// let allocation = marker.allocate_slice_copy(message).unwrap();
+    /// let allocation: Allocation<str> = marker.allocate_slice_copy(message)
+    ///     .unwrap();
     /// assert_eq!(&*allocation, "foo");
     /// ```
     #[inline(always)]
     pub fn allocate_slice_copy<'marker, T, U>(
         &'marker self,
-        slice: &U,
+        values: U,
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
         T: SliceLike + ?Sized,
         <T as SliceLike>::Element: Copy,
-        U: AsSliceLike<T> + ?Sized,
+        U: SliceSource<T>,
     {
-        Marker::allocate_slice_copy(self, slice)
+        Marker::allocate_slice_copy(self, values)
     }
 
     /// Extends an allocation by moving values onto its start, converting the
@@ -1874,7 +1897,7 @@ where
         T: ConcatenateSlice + ?Sized,
         U: ?Sized,
         Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
-        V: SliceSource<T>,
+        V: SliceMoveSource<T>,
     {
         Marker::extend(self, allocation, values)
     }
@@ -1917,16 +1940,16 @@ where
     pub fn prepend_clone<'marker, T, U, V>(
         &'marker self,
         allocation: Allocation<'marker, U>,
-        slice: &V,
+        values: V,
     ) -> Result<Allocation<'marker, T>, Error<(Allocation<'marker, U>,)>>
     where
         T: ConcatenateSlice + ?Sized,
         <T as SliceLike>::Element: Clone,
         U: ?Sized,
         Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
-        V: AsSliceLike<T> + ?Sized,
+        V: SliceSource<T>,
     {
-        Marker::extend_clone(self, allocation, slice)
+        Marker::extend_clone(self, allocation, values)
     }
 
     /// Extends an allocation by copying values onto its start, converting the
@@ -1967,16 +1990,16 @@ where
     pub fn prepend_copy<'marker, T, U, V>(
         &'marker self,
         allocation: Allocation<'marker, U>,
-        slice: &V,
+        values: V,
     ) -> Result<Allocation<'marker, T>, Error<(Allocation<'marker, U>,)>>
     where
         T: ConcatenateSlice + ?Sized,
         <T as SliceLike>::Element: Copy,
         U: ?Sized,
         Allocation<'marker, U>: IntoSliceAllocation<'marker, T>,
-        V: AsSliceLike<T> + ?Sized,
+        V: SliceSource<T>,
     {
-        Marker::extend_copy(self, allocation, slice)
+        Marker::extend_copy(self, allocation, values)
     }
 
     /// Combines cloned copies of each of the provided slices into a single
@@ -1985,26 +2008,27 @@ where
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::Scratchpad;
+    /// use scratchpad::{Allocation, Scratchpad};
     ///
     /// let scratchpad = Scratchpad::<[u8; 16], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_back().unwrap();
     ///
-    /// let combined = marker.concat_slices_clone(&["Hello,", " world", "!"])
-    ///     .unwrap();
+    /// let combined: Allocation<str> = marker.concat_slices_clone(
+    ///     ("Hello,", " world", "!")
+    /// ).unwrap();
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     #[inline(always)]
     pub fn concat_slices_clone<'marker, T, U>(
         &'marker self,
-        slices: &[&U],
+        values: U,
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
         T: ConcatenateSlice + ?Sized,
         <T as SliceLike>::Element: Clone,
-        U: AsSliceLike<T> + ?Sized,
+        U: SliceSourceCollection<T>,
     {
-        Marker::concat_slices_clone(self, slices)
+        Marker::concat_slices_clone(self, values)
     }
 
     /// Combines copies of each of the provided slices into a single slice
@@ -2016,26 +2040,27 @@ where
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::Scratchpad;
+    /// use scratchpad::{Allocation, Scratchpad};
     ///
     /// let scratchpad = Scratchpad::<[u8; 16], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_back().unwrap();
     ///
-    /// let combined = marker.concat_slices_copy(&["Hello,", " world", "!"])
-    ///     .unwrap();
+    /// let combined: Allocation<str> = marker.concat_slices_copy(
+    ///     ("Hello,", " world", "!")
+    /// ).unwrap();
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     #[inline(always)]
     pub fn concat_slices_copy<'marker, T, U>(
         &'marker self,
-        slices: &[&U],
+        values: U,
     ) -> Result<Allocation<'marker, T>, Error<()>>
     where
         T: ConcatenateSlice + ?Sized,
         <T as SliceLike>::Element: Copy,
-        U: AsSliceLike<T> + ?Sized,
+        U: SliceSourceCollection<T>,
     {
-        Marker::concat_slices_copy(self, slices)
+        Marker::concat_slices_copy(self, values)
     }
 }
 

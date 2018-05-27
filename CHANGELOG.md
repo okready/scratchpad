@@ -6,28 +6,26 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 ### Added
-- `SliceSource` implementations for borrowed references to arrays of `Copy`
-  types.
+- `SliceSource` trait for providing slice data to `Marker` functions from
+  various source data types.
+- `SliceMoveSource` subtrait of `SliceSource` that allows for taking ownership
+  of the contents of a slice.
+- `SliceSourceCollection` trait for abstracting collections (namely tuples and
+  arrays) of `SliceSource` objects.
+- `SliceMoveSourceCollection` subtrait of `SliceSourceCollection` that allows
+  for taking ownership of the slices provided by all `SliceSource` objects in
+  a collection.
 
 ### Changed
-- Modified `Marker` allocate, extend, and slice concatenate methods that clone
-  or copy from slices to allow for more general slice inputs by way of a new
-  trait, `AsSliceLike`, allowing references to scalars, arrays, or any
-  user-defined type that implements the trait to be used as input for said
-  functions. This also makes the inputs for the extend methods consistent with
-  the slice allocation and concatenation methods, and their implementations
-  can now make use of the corresponding slice allocation methods to reduce
-  redundant code.
-- Renamed the `OwnedSlice` trait to `SliceSource` to avoid confusion (the name
-  `OwnedSlice` implies ownership of the slice data, but we also implement it
-  for a subset of borrowed reference types so that `Copy` types to be used
-  with non-copy `Marker` functions).
-- Use `slice::copy_from_slice()` instead of `ptr::copy_nonoverlapping()` to
-  copy data into the new allocation in `Marker::allocate_slice_copy()` (both
-  perform essentially the same operation, but the former is safer).
+- Overhauled `Marker` functions that work with slices to take slice input
+  using the new `SliceSource`, `SliceMoveSource`, `SliceSourceCollection`, and
+  `SliceMoveSourceCollection` traits, allowing for more flexible input for
+  slice data. Additionally, the inputs for these functions are now more
+  consistent with one another.
 
 ### Removed
-- Unnecessary generic parameters.
+- `OwnedSlice` trait (superseded by `SliceSource` and its related traits).
+- Miscellaneous unnecessary generic parameters.
 
 ## [1.0.0-beta.1] - 2018-05-25
 ### Added
