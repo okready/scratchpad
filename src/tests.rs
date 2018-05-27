@@ -575,7 +575,7 @@ fn marker_extend_test() {
         let allocation =
             marker.allocate(DropCounter::new(&drop_count)).unwrap();
         let allocation = marker
-            .extend(allocation, DropCounter::new(&drop_count))
+            .extend(allocation, [DropCounter::new(&drop_count)])
             .unwrap();
 
         #[cfg(any(feature = "std", feature = "unstable"))]
@@ -636,7 +636,7 @@ fn allocation_concat_string_test() {
     let scratchpad = Scratchpad::<[u8; 32], [usize; 1]>::static_new();
     let marker = scratchpad.mark_front().unwrap();
 
-    let foo: Allocation<str> = marker.allocate_slice_copy("foo").unwrap();
+    let foo = marker.allocate_slice_copy("foo").unwrap();
     let bar = marker.allocate_slice_copy("bar").unwrap();
     let foobar = foo.concat(bar).unwrap();
     assert_eq!(&*foobar, "foobar");
@@ -648,7 +648,7 @@ fn marker_extend_string_test() {
     let scratchpad = Scratchpad::<[u8; 32], [usize; 1]>::static_new();
     let marker = scratchpad.mark_front().unwrap();
 
-    let foo: Allocation<str> = marker.allocate_slice_copy("foo").unwrap();
+    let foo = marker.allocate_slice_copy("foo").unwrap();
     let foobar = marker.extend(foo, "bar").unwrap();
     assert_eq!(&*foobar, "foobar");
 }

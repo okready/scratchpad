@@ -316,14 +316,13 @@ pub trait Marker {
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::{Allocation, Scratchpad};
+    /// use scratchpad::Scratchpad;
     ///
     /// let scratchpad = Scratchpad::<[u8; 32], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_front().unwrap();
     ///
     /// let message = "foo";
-    /// let allocation: Allocation<str> = marker.allocate_slice_clone(message)
-    ///     .unwrap();
+    /// let allocation = marker.allocate_slice_clone(message).unwrap();
     /// assert_eq!(&*allocation, "foo");
     /// ```
     fn allocate_slice_clone<'marker, T, U>(
@@ -364,14 +363,13 @@ pub trait Marker {
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::{Allocation, Scratchpad};
+    /// use scratchpad::Scratchpad;
     ///
     /// let scratchpad = Scratchpad::<[u8; 32], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_front().unwrap();
     ///
     /// let message = "foo";
-    /// let allocation: Allocation<str> = marker.allocate_slice_copy(message)
-    ///     .unwrap();
+    /// let allocation = marker.allocate_slice_copy(message).unwrap();
     /// assert_eq!(&*allocation, "foo");
     /// ```
     fn allocate_slice_copy<'marker, T, U>(
@@ -439,7 +437,7 @@ pub trait Marker {
     ///
     /// let a = marker.allocate([3.14159f32, 2.71828f32]).unwrap();
     ///
-    /// let ab = marker.extend(a, 0.70711f32).unwrap();
+    /// let ab = marker.extend(a, [0.70711f32]).unwrap();
     /// assert_eq!(*ab, [3.14159f32, 2.71828f32, 0.70711f32]);
     ///
     /// let abc = marker.extend(ab, vec![0.57722f32, 1.61803f32]).unwrap();
@@ -627,14 +625,13 @@ pub trait Marker {
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::{Allocation, Scratchpad};
+    /// use scratchpad::Scratchpad;
     ///
     /// let scratchpad = Scratchpad::<[u8; 16], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_front().unwrap();
     ///
-    /// let combined: Allocation<str> = marker.concat_slices(
-    ///     ("Hello,", " world", "!")
-    /// ).unwrap();
+    /// let combined = marker.concat_slices(("Hello,", " world", "!"))
+    ///     .unwrap();
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     fn concat_slices<'marker, T, U>(
@@ -692,14 +689,13 @@ pub trait Marker {
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::{Allocation, Scratchpad};
+    /// use scratchpad::Scratchpad;
     ///
     /// let scratchpad = Scratchpad::<[u8; 16], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_front().unwrap();
     ///
-    /// let combined: Allocation<str> = marker.concat_slices_clone(
-    ///     ("Hello,", " world", "!")
-    /// ).unwrap();
+    /// let combined = marker.concat_slices_clone(("Hello,", " world", "!"))
+    ///     .unwrap();
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     fn concat_slices_clone<'marker, T, U>(
@@ -754,14 +750,13 @@ pub trait Marker {
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::{Allocation, Scratchpad};
+    /// use scratchpad::Scratchpad;
     ///
     /// let scratchpad = Scratchpad::<[u8; 16], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_front().unwrap();
     ///
-    /// let combined: Allocation<str> = marker.concat_slices_copy(
-    ///     ("Hello,", " world", "!")
-    /// ).unwrap();
+    /// let combined = marker.concat_slices_copy(("Hello,", " world", "!"))
+    ///     .unwrap();
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     fn concat_slices_copy<'marker, T, U>(
@@ -1225,14 +1220,13 @@ where
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::{Allocation, Scratchpad};
+    /// use scratchpad::Scratchpad;
     ///
     /// let scratchpad = Scratchpad::<[u8; 32], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_front().unwrap();
     ///
     /// let message = "foo";
-    /// let allocation: Allocation<str> = marker.allocate_slice_clone(message)
-    ///     .unwrap();
+    /// let allocation = marker.allocate_slice_clone(message).unwrap();
     /// assert_eq!(&*allocation, "foo");
     /// ```
     #[inline(always)]
@@ -1254,14 +1248,13 @@ where
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::{Allocation, Scratchpad};
+    /// use scratchpad::Scratchpad;
     ///
     /// let scratchpad = Scratchpad::<[u8; 32], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_front().unwrap();
     ///
     /// let message = "foo";
-    /// let allocation: Allocation<str> = marker.allocate_slice_copy(message)
-    ///     .unwrap();
+    /// let allocation = marker.allocate_slice_copy(message).unwrap();
     /// assert_eq!(&*allocation, "foo");
     /// ```
     #[inline(always)]
@@ -1302,7 +1295,7 @@ where
     ///
     /// let a = marker.allocate([3.14159f32, 2.71828f32]).unwrap();
     ///
-    /// let ab = marker.append(a, 0.70711f32).unwrap();
+    /// let ab = marker.append(a, [0.70711f32]).unwrap();
     /// assert_eq!(*ab, [3.14159f32, 2.71828f32, 0.70711f32]);
     ///
     /// let abc = marker.append(ab, vec![0.57722f32, 1.61803f32]).unwrap();
@@ -1432,14 +1425,13 @@ where
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::{Allocation, Scratchpad};
+    /// use scratchpad::Scratchpad;
     ///
     /// let scratchpad = Scratchpad::<[u8; 16], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_front().unwrap();
     ///
-    /// let combined: Allocation<str> = marker.concat_slices(
-    ///     ("Hello,", " world", "!")
-    /// ).unwrap();
+    /// let combined = marker.concat_slices(("Hello,", " world", "!"))
+    ///     .unwrap();
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     #[inline(always)]
@@ -1460,14 +1452,13 @@ where
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::{Allocation, Scratchpad};
+    /// use scratchpad::Scratchpad;
     ///
     /// let scratchpad = Scratchpad::<[u8; 16], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_front().unwrap();
     ///
-    /// let combined: Allocation<str> = marker.concat_slices_clone(
-    ///     ("Hello,", " world", "!")
-    /// ).unwrap();
+    /// let combined = marker.concat_slices_clone(("Hello,", " world", "!"))
+    ///     .unwrap();
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     #[inline(always)]
@@ -1492,14 +1483,13 @@ where
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::{Allocation, Scratchpad};
+    /// use scratchpad::Scratchpad;
     ///
     /// let scratchpad = Scratchpad::<[u8; 16], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_front().unwrap();
     ///
-    /// let combined: Allocation<str> = marker.concat_slices_copy(
-    ///     ("Hello,", " world", "!")
-    /// ).unwrap();
+    /// let combined = marker.concat_slices_copy(("Hello,", " world", "!"))
+    ///     .unwrap();
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     #[inline(always)]
@@ -1894,14 +1884,13 @@ where
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::{Allocation, Scratchpad};
+    /// use scratchpad::Scratchpad;
     ///
     /// let scratchpad = Scratchpad::<[u8; 32], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_back().unwrap();
     ///
     /// let message = "foo";
-    /// let allocation: Allocation<str> = marker.allocate_slice_clone(message)
-    ///     .unwrap();
+    /// let allocation = marker.allocate_slice_clone(message).unwrap();
     /// assert_eq!(&*allocation, "foo");
     /// ```
     #[inline(always)]
@@ -1923,14 +1912,13 @@ where
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::{Allocation, Scratchpad};
+    /// use scratchpad::Scratchpad;
     ///
     /// let scratchpad = Scratchpad::<[u8; 32], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_back().unwrap();
     ///
     /// let message = "foo";
-    /// let allocation: Allocation<str> = marker.allocate_slice_copy(message)
-    ///     .unwrap();
+    /// let allocation = marker.allocate_slice_copy(message).unwrap();
     /// assert_eq!(&*allocation, "foo");
     /// ```
     #[inline(always)]
@@ -1971,7 +1959,7 @@ where
     ///
     /// let a = marker.allocate([3.14159f32, 2.71828f32]).unwrap();
     ///
-    /// let ab = marker.prepend(a, 0.70711f32).unwrap();
+    /// let ab = marker.prepend(a, [0.70711f32]).unwrap();
     /// assert_eq!(*ab, [0.70711f32, 3.14159f32, 2.71828f32]);
     ///
     /// let abc = marker.prepend(ab, vec![0.57722f32, 1.61803f32]).unwrap();
@@ -2101,14 +2089,13 @@ where
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::{Allocation, Scratchpad};
+    /// use scratchpad::Scratchpad;
     ///
     /// let scratchpad = Scratchpad::<[u8; 16], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_back().unwrap();
     ///
-    /// let combined: Allocation<str> = marker.concat_slices(
-    ///     ("Hello,", " world", "!")
-    /// ).unwrap();
+    /// let combined = marker.concat_slices(("Hello,", " world", "!"))
+    ///     .unwrap();
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     #[inline(always)]
@@ -2129,14 +2116,13 @@ where
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::{Allocation, Scratchpad};
+    /// use scratchpad::Scratchpad;
     ///
     /// let scratchpad = Scratchpad::<[u8; 16], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_back().unwrap();
     ///
-    /// let combined: Allocation<str> = marker.concat_slices_clone(
-    ///     ("Hello,", " world", "!")
-    /// ).unwrap();
+    /// let combined = marker.concat_slices_clone(("Hello,", " world", "!"))
+    ///     .unwrap();
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     #[inline(always)]
@@ -2161,14 +2147,13 @@ where
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::{Allocation, Scratchpad};
+    /// use scratchpad::Scratchpad;
     ///
     /// let scratchpad = Scratchpad::<[u8; 16], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_back().unwrap();
     ///
-    /// let combined: Allocation<str> = marker.concat_slices_copy(
-    ///     ("Hello,", " world", "!")
-    /// ).unwrap();
+    /// let combined = marker.concat_slices_copy(("Hello,", " world", "!"))
+    ///     .unwrap();
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     #[inline(always)]
