@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - `SliceMoveSourceCollection` subtrait of `SliceSourceCollection` that allows
   for taking ownership of the slices provided by all `SliceSource` objects in
   a collection.
+- `Marker::concat_slices()` function for concatenating slices by moving their
+  contents into the new allocation.
 
 ### Changed
 - Overhauled `Marker` functions that work with slices to take slice input

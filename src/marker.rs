@@ -13,8 +13,8 @@ use core::slice;
 
 use super::{
     Allocation, Buffer, ConcatenateSlice, Error, ErrorKind,
-    IntoSliceAllocation, Scratchpad, SliceLike, SliceMoveSource, SliceSource,
-    SliceSourceCollection, Tracking,
+    IntoSliceAllocation, Scratchpad, SliceLike, SliceMoveSource,
+    SliceMoveSourceCollection, SliceSource, SliceSourceCollection, Tracking,
 };
 use core::marker::PhantomData;
 use core::mem::{align_of, forget, size_of};
@@ -618,6 +618,71 @@ pub trait Marker {
                     allocation, val_alloc,
                 ))
             },
+        }
+    }
+
+    /// Combines each of the provided slices into a single slice allocated
+    /// from this marker, moving the slice values into the new allocation.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::{Allocation, Scratchpad};
+    ///
+    /// let scratchpad = Scratchpad::<[u8; 16], [usize; 1]>::static_new();
+    /// let marker = scratchpad.mark_front().unwrap();
+    ///
+    /// let combined: Allocation<str> = marker.concat_slices(
+    ///     ("Hello,", " world", "!")
+    /// ).unwrap();
+    /// assert_eq!(&*combined, "Hello, world!");
+    /// ```
+    fn concat_slices<'marker, T, U>(
+        &'marker self,
+        values: U,
+    ) -> Result<Allocation<'marker, T>, Error<(U,)>>
+    where
+        T: ConcatenateSlice + ?Sized,
+        U: SliceMoveSourceCollection<T>,
+    {
+        unsafe {
+            let mut len = 0;
+            values.for_each(|item| {
+                len += item.as_slice_like().as_element_slice().len();
+            });
+
+            let alloc_result = self
+                .allocate_array_uninitialized::<<T as SliceLike>::Element>(
+                    len,
+                );
+            match alloc_result {
+                Err(e) => Err(e.map(|()| (values,))),
+                Ok(allocation) => {
+                    let data = &mut *allocation.data.as_ptr();
+                    debug_assert_eq!(data.len(), len);
+                    forget(allocation);
+
+                    let mut index = 0;
+                    values.move_all_elements(|element| {
+                        ptr::write(&mut data[index], element);
+                        index += 1;
+                    });
+
+                    debug_assert_eq!(index, data.len());
+
+                    Ok(Allocation {
+                        data: NonNull::new_unchecked(
+                            <T as SliceLike>::from_element_slice_mut(
+                                slice::from_raw_parts_mut(
+                                    data.as_mut_ptr(),
+                                    len,
+                                ),
+                            ),
+                        ),
+                        _phantom: PhantomData,
+                    })
+                }
+            }
         }
     }
 
@@ -1361,6 +1426,34 @@ where
         Marker::extend_copy(self, allocation, values)
     }
 
+    /// Combines each of the provided slices into a single slice allocated
+    /// from this marker, moving the slice values into the new allocation.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::{Allocation, Scratchpad};
+    ///
+    /// let scratchpad = Scratchpad::<[u8; 16], [usize; 1]>::static_new();
+    /// let marker = scratchpad.mark_front().unwrap();
+    ///
+    /// let combined: Allocation<str> = marker.concat_slices(
+    ///     ("Hello,", " world", "!")
+    /// ).unwrap();
+    /// assert_eq!(&*combined, "Hello, world!");
+    /// ```
+    #[inline(always)]
+    pub fn concat_slices<'marker, T, U>(
+        &'marker self,
+        values: U,
+    ) -> Result<Allocation<'marker, T>, Error<(U,)>>
+    where
+        T: ConcatenateSlice + ?Sized,
+        U: SliceMoveSourceCollection<T>,
+    {
+        Marker::concat_slices(self, values)
+    }
+
     /// Combines cloned copies of each of the provided slices into a single
     /// slice allocated from this marker.
     ///
@@ -2000,6 +2093,34 @@ where
         V: SliceSource<T>,
     {
         Marker::extend_copy(self, allocation, values)
+    }
+
+    /// Combines each of the provided slices into a single slice allocated
+    /// from this marker, moving the slice values into the new allocation.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::{Allocation, Scratchpad};
+    ///
+    /// let scratchpad = Scratchpad::<[u8; 16], [usize; 1]>::static_new();
+    /// let marker = scratchpad.mark_back().unwrap();
+    ///
+    /// let combined: Allocation<str> = marker.concat_slices(
+    ///     ("Hello,", " world", "!")
+    /// ).unwrap();
+    /// assert_eq!(&*combined, "Hello, world!");
+    /// ```
+    #[inline(always)]
+    pub fn concat_slices<'marker, T, U>(
+        &'marker self,
+        values: U,
+    ) -> Result<Allocation<'marker, T>, Error<(U,)>>
+    where
+        T: ConcatenateSlice + ?Sized,
+        U: SliceMoveSourceCollection<T>,
+    {
+        Marker::concat_slices(self, values)
     }
 
     /// Combines cloned copies of each of the provided slices into a single
