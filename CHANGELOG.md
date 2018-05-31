@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   `SliceMoveSourceCollection` traits, allowing for more flexible input for
   slice data. Additionally, the inputs for these functions are now more
   consistent with one another.
+- Unconditionally enable `i128` and `u128` implementations of `ByteData` if
+  the `rustc` version detected at build time is 1.26 or later.
 
 ### Removed
 - `OwnedSlice` trait (superseded by `SliceSource` and its related traits).

@@ -24,5 +24,8 @@ std = []
 # Allow unstable features (requires a nightly toolchain).
 unstable = []
 
+[build-dependencies]
+rustc_version = "0.2"
+
 [dev-dependencies]
 arrayvec = { version = "0.4", default-features = false }
