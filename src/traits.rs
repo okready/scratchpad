@@ -55,14 +55,14 @@ unsafe impl ByteData for u8 {}
 unsafe impl ByteData for u16 {}
 unsafe impl ByteData for u32 {}
 unsafe impl ByteData for u64 {}
-#[cfg(feature = "nightly")]
+#[cfg(feature = "unstable")]
 unsafe impl ByteData for u128 {}
 unsafe impl ByteData for usize {}
 unsafe impl ByteData for i8 {}
 unsafe impl ByteData for i16 {}
 unsafe impl ByteData for i32 {}
 unsafe impl ByteData for i64 {}
-#[cfg(feature = "nightly")]
+#[cfg(feature = "unstable")]
 unsafe impl ByteData for i128 {}
 unsafe impl ByteData for isize {}
 unsafe impl ByteData for CacheAligned {}

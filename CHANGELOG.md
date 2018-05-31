@@ -40,6 +40,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   into a supported type.
 - Miscellaneous unnecessary generic parameters.
 
+### Fixed
+- Check for the correct feature ("unstable" versus "nightly") in the `cfg`
+  attributes used to control whether `ByteData` implementations are generated
+  for `i128` and `u128`.
+
 ## [1.0.0-beta.1] - 2018-05-25
 ### Added
 - `Marker::allocate_slice()`, `Marker::allocate_slice_clone()`, and
