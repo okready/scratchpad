@@ -13,7 +13,7 @@ use core::ptr;
 use core::slice;
 
 use super::{
-    ConcatenateSlice, Error, ErrorKind, IntoSliceAllocation, SliceLike,
+    ConcatenateSlice, Error, ErrorKind, IntoSliceLikeAllocation, SliceLike,
 };
 use core::marker::PhantomData;
 use core::mem::forget;
@@ -174,12 +174,12 @@ where
     where
         U: ConcatenateSlice + ?Sized,
         V: ?Sized,
-        Allocation<'marker, T>: IntoSliceAllocation<'marker, U>,
-        Allocation<'marker, V>: IntoSliceAllocation<'marker, U>,
+        Allocation<'marker, T>: IntoSliceLikeAllocation<'marker, U>,
+        Allocation<'marker, V>: IntoSliceLikeAllocation<'marker, U>,
     {
         unsafe {
-            let data0 = (*self.as_slice_ptr()).as_element_slice();
-            let data1 = (*other.as_slice_ptr()).as_element_slice();
+            let data0 = (*self.as_slice_like_ptr()).as_element_slice();
+            let data1 = (*other.as_slice_like_ptr()).as_element_slice();
             let data0_len = data0.len();
             let data1_len = data1.len();
             assert!(data0_len <= ::core::isize::MAX as usize);
@@ -241,11 +241,11 @@ where
     where
         U: ConcatenateSlice + ?Sized,
         V: ?Sized,
-        Allocation<'marker, T>: IntoSliceAllocation<'marker, U>,
-        Allocation<'marker, V>: IntoSliceAllocation<'marker, U>,
+        Allocation<'marker, T>: IntoSliceLikeAllocation<'marker, U>,
+        Allocation<'marker, V>: IntoSliceLikeAllocation<'marker, U>,
     {
-        let data0 = (*self.as_mut_slice_ptr()).as_element_slice_mut();
-        let data1 = (*other.as_mut_slice_ptr()).as_element_slice_mut();
+        let data0 = (*self.as_mut_slice_like_ptr()).as_element_slice_mut();
+        let data1 = (*other.as_mut_slice_like_ptr()).as_element_slice_mut();
 
         forget(self);
         forget(other);
