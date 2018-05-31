@@ -704,17 +704,17 @@ where
 /// Trait for sources of slice data provided to [`Marker`] trait methods.
 ///
 /// `SliceSource` is implemented for static arrays and slice references. If
-/// either the `std` or `unstable` features are enabled, [`boxed slice`] and
+/// either the `std` or `unstable` features are enabled, [boxed slice] and
 /// [`Vec`] instances can be used as slice sources as well.
 ///
 /// `SliceSource` on its own is only usable for `Clone` and `Copy` data
 /// sources. For move operations, the [`SliceMoveSource`] subtrait provides
 /// additional functionality for moving slices out of supported types.
 ///
-/// [`boxed slice`]: https://doc.rust-lang.org/std/boxed/struct.Box.html
 /// [`Marker`]: trait.Marker.html
 /// [`SliceMoveSource`]: trait.SliceMoveSource.html
 /// [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
+/// [boxed slice]: https://doc.rust-lang.org/std/boxed/struct.Box.html
 pub trait SliceSource<T>
 where
     T: SliceLike + ?Sized,
