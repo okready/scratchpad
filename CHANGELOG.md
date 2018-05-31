@@ -27,17 +27,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Removed
 - `OwnedSlice` trait (superseded by `SliceSource` and its related traits).
-- Automatic coercion of scalar values (including boxed scalars) as slices when
-  used as arguments for `Marker::allocate_slice()`, `Marker::extend()`, and
-  the related `MarkerFront` and `MarkerBack` wrappers. This removes any
-  ambiguity when trying to determine whether an array or slice reference
-  should be interpreted as a slice of its contents or a single-element slice
-  containing either the array or slice reference, reducing the need for
-  explicit type annotations when simply passing arrays and slice references as
-  arguments. The use of scalars is arguably more of an edge case anyway, and
-  they can still be used via explicit conversion into an array (by enclosing
-  with square brackets) or slice (using something akin to
-  `std::slice::from_raw_parts()` or the `ref_slice` crate).
+- Automatic coercion of scalar values (including boxed scalars) and boxed
+  arrays into slices when used as arguments for `Marker::allocate_slice()`,
+  `Marker::extend()`, and the related `MarkerFront` and `MarkerBack` wrappers.
+  Support for scalars previously resulted in ambiguity when trying to
+  determine whether an array or slice reference should be interpreted as a
+  slice of its contents or a single-element slice containing either the array
+  or slice reference, requiring explicit type annotations in such cases. On
+  the other hand, support for boxed arrays simply becomes difficult to
+  implement when using the newly added `Array` trait, so they've simply been
+  removed in response. Both can still be used as input via explicit conversion
+  into a supported type.
 - Miscellaneous unnecessary generic parameters.
 
 ## [1.0.0-beta.1] - 2018-05-25

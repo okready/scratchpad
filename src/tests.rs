@@ -593,7 +593,8 @@ fn marker_extend_test() {
 
             let allocation = marker.extend(allocation, v).unwrap();
             let allocation = marker.extend(allocation, bs).unwrap();
-            let allocation = marker.extend(allocation, ba).unwrap();
+            let allocation =
+                marker.extend(allocation, ba as Box<[DropCounter]>).unwrap();
 
             allocation
         };

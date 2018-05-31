@@ -67,6 +67,24 @@ unsafe impl ByteData for i128 {}
 unsafe impl ByteData for isize {}
 unsafe impl ByteData for CacheAligned {}
 
+/// Trait for static arrays.
+///
+/// # Safety
+///
+/// This trait is declared as unsafe to signify that it should only be
+/// implemented for static arrays (`[T; x]` for some size x). Implementing it
+/// for other types can result in undefined behavior and instability.
+pub unsafe trait Array {
+    /// Array item type.
+    type Item: Sized;
+
+    /// Returns a slice of the entire array.
+    fn as_slice(&self) -> &[Self::Item];
+
+    /// Returns a mutable slice of the entire array.
+    fn as_mut_slice(&mut self) -> &mut [Self::Item];
+}
+
 /// Trait for [`Scratchpad`] buffer types.
 ///
 /// `Buffer` objects contain the memory from which [`Scratchpad`] allocations
@@ -81,21 +99,33 @@ pub trait Buffer {
     fn as_bytes_mut(&mut self) -> &mut [u8];
 }
 
-/// [`Buffer`] sub-trait for static arrays.
-///
-/// This trait is used specifically to restrict the implementation of
-/// [`Scratchpad::static_new()`] to static array buffers.
-///
-/// # Safety
-///
-/// [`Scratchpad::static_new()`] leaves instances of this type **entirely**
-/// uninitialized, so implementing it is fundamentally unsafe. It should only
-/// be implemented by static arrays of [`ByteData`] types.
-///
-/// [`Buffer`]: trait.Buffer.html
-/// [`ByteData`]: trait.ByteData.html
-/// [`Scratchpad::static_new()`]: struct.Scratchpad.html#method.static_new
-pub unsafe trait StaticBuffer: Buffer {}
+impl<T> Buffer for T
+where
+    T: Array,
+    <T as Array>::Item: ByteData,
+{
+    #[inline]
+    fn as_bytes(&self) -> &[u8] {
+        let data = self.as_slice();
+        unsafe {
+            slice::from_raw_parts(
+                data.as_ptr() as *const u8,
+                data.len() * size_of::<<T as Array>::Item>(),
+            )
+        }
+    }
+
+    #[inline]
+    fn as_bytes_mut(&mut self) -> &mut [u8] {
+        let data = self.as_mut_slice();
+        unsafe {
+            slice::from_raw_parts_mut(
+                data.as_mut_ptr() as *mut u8,
+                data.len() * size_of::<<T as Array>::Item>(),
+            )
+        }
+    }
+}
 
 impl<'a, T> Buffer for &'a mut [T]
 where
@@ -148,6 +178,29 @@ where
             )
         }
     }
+}
+
+/// [`Buffer`] sub-trait for static arrays.
+///
+/// This trait is used specifically to restrict the implementation of
+/// [`Scratchpad::static_new()`] to static array buffers.
+///
+/// # Safety
+///
+/// [`Scratchpad::static_new()`] leaves instances of this type **entirely**
+/// uninitialized, so implementing it is fundamentally unsafe. It should only
+/// be implemented by static arrays of [`ByteData`] types.
+///
+/// [`Buffer`]: trait.Buffer.html
+/// [`ByteData`]: trait.ByteData.html
+/// [`Scratchpad::static_new()`]: struct.Scratchpad.html#method.static_new
+pub unsafe trait StaticBuffer: Buffer + Array {}
+
+unsafe impl<T> StaticBuffer for T
+where
+    T: Array,
+    <T as Array>::Item: ByteData,
+{
 }
 
 /// Trait for [`Scratchpad`] allocation tracking containers.
@@ -630,15 +683,15 @@ where
 
 /// Trait for sources of slice data provided to [`Marker`] trait methods.
 ///
-/// Slices can be generated from scalar values and arrays as well as other
-/// slices. If either the `std` or `unstable` features are enabled, [`Box`]
-/// and [`Vec`] can be used as slice sources as well.
+/// `SliceSource` is implemented for static arrays and slice references. If
+/// either the `std` or `unstable` features are enabled, [`boxed slice`] and
+/// [`Vec`] instances can be used as slice sources as well.
 ///
 /// `SliceSource` on its own is only usable for `Clone` and `Copy` data
 /// sources. For move operations, the [`SliceMoveSource`] subtrait provides
 /// additional functionality for moving slices out of supported types.
 ///
-/// [`Box`]: https://doc.rust-lang.org/std/boxed/struct.Box.html
+/// [`boxed slice`]: https://doc.rust-lang.org/std/boxed/struct.Box.html
 /// [`Marker`]: trait.Marker.html
 /// [`SliceMoveSource`]: trait.SliceMoveSource.html
 /// [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
@@ -696,6 +749,16 @@ where
     }
 }
 
+impl<T> SliceSource<[<T as Array>::Item]> for T
+where
+    T: Array,
+{
+    #[inline]
+    fn as_slice_like(&self) -> &[<T as Array>::Item] {
+        self.as_slice()
+    }
+}
+
 impl<'a, T> SliceSource<T> for &'a T
 where
     T: SliceLike + ?Sized,
@@ -718,6 +781,14 @@ where
 }
 
 #[cfg(any(feature = "std", feature = "unstable"))]
+impl<T> SliceSource<[T]> for Vec<T> {
+    #[inline]
+    fn as_slice_like(&self) -> &[T] {
+        self.as_slice()
+    }
+}
+
+#[cfg(any(feature = "std", feature = "unstable"))]
 impl<'a, T> SliceSource<T> for &'a Box<T>
 where
     T: SliceLike + ?Sized,
@@ -729,18 +800,10 @@ where
 }
 
 #[cfg(any(feature = "std", feature = "unstable"))]
-impl<T> SliceSource<[T]> for Vec<T> {
-    #[inline]
-    fn as_slice_like(&self) -> &[T] {
-        &**self
-    }
-}
-
-#[cfg(any(feature = "std", feature = "unstable"))]
 impl<'a, T> SliceSource<[T]> for &'a Vec<T> {
     #[inline]
     fn as_slice_like(&self) -> &[T] {
-        &***self
+        self.as_slice()
     }
 }
 
@@ -775,6 +838,24 @@ where
         F: FnMut(<T as SliceLike>::Element);
 }
 
+impl<T> SliceMoveSource<[<T as Array>::Item]> for T
+where
+    T: Array,
+{
+    fn move_elements<F>(self, mut f: F)
+    where
+        F: FnMut(<T as Array>::Item),
+    {
+        unsafe {
+            for item in self.as_slice() {
+                f(ptr::read(item))
+            }
+
+            forget(self);
+        }
+    }
+}
+
 impl<'a, T> SliceMoveSource<T> for &'a T
 where
     T: SliceLike + ?Sized,
@@ -800,13 +881,25 @@ where
         F: FnMut(<T as SliceLike>::Element),
     {
         unsafe {
-            for item in (*self).as_element_slice() {
+            for item in self.as_element_slice() {
                 f(ptr::read(item));
             }
 
             Box::from_raw((*Box::into_raw(self)).as_element_slice_mut()
                 as *mut [<T as SliceLike>::Element]
                 as *mut [ManuallyDrop<<T as SliceLike>::Element>]);
+        }
+    }
+}
+
+#[cfg(any(feature = "std", feature = "unstable"))]
+impl<T> SliceMoveSource<[T]> for Vec<T> {
+    fn move_elements<F>(self, mut f: F)
+    where
+        F: FnMut(T),
+    {
+        for item in self {
+            f(item);
         }
     }
 }
@@ -821,20 +914,8 @@ where
     where
         F: FnMut(<T as SliceLike>::Element),
     {
-        for item in (*self).as_element_slice() {
+        for item in self.as_element_slice() {
             f(*item);
-        }
-    }
-}
-
-#[cfg(any(feature = "std", feature = "unstable"))]
-impl<T> SliceMoveSource<[T]> for Vec<T> {
-    fn move_elements<F>(self, mut f: F)
-    where
-        F: FnMut(T),
-    {
-        for item in self {
-            f(item);
         }
     }
 }
@@ -856,7 +937,22 @@ where
 
 /// Trait for generic access to collections of [`SliceSource`] objects.
 ///
+/// Collections can be either arrays, tuples, or slices of [`SliceSource`]
+/// objects. Tuples can contain contain objects of different [`SliceSource`]
+/// implementation types. If either the `std` or `unstable` features are
+/// enabled, [`boxed slice`] and [`Vec`] instances can be used as slice
+/// source collections as well.
+///
+/// `SliceSourceCollection` on its own is only usable for `Clone` and `Copy`
+/// data sources. For move operations, the [`SliceMoveSourceCollection`]
+/// subtrait provides additional functionality for moving slices out of
+/// supported types.
+///
+/// [`boxed slice`]: https://doc.rust-lang.org/std/boxed/struct.Box.html
+/// [`Marker`]: trait.Marker.html
+/// [`SliceMoveSourceCollection`]: trait.SliceMoveSourceCollection.html
 /// [`SliceSource`]: trait.SliceSource.html
+/// [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
 pub trait SliceSourceCollection<T>
 where
     T: SliceLike + ?Sized,
@@ -883,6 +979,22 @@ where
     fn for_each<F>(&self, f: F)
     where
         F: for<'a> FnMut(&'a SliceSource<T>);
+}
+
+impl<T, U> SliceSourceCollection<T> for U
+where
+    T: SliceLike + ?Sized,
+    U: Array,
+    <U as Array>::Item: SliceSource<T>,
+{
+    fn for_each<F>(&self, mut f: F)
+    where
+        F: for<'a> FnMut(&'a SliceSource<T>),
+    {
+        for source in self.as_slice() {
+            f(source);
+        }
+    }
 }
 
 /// Subtrait of [`SliceSourceCollection`] for taking ownership of the contents
@@ -915,7 +1027,28 @@ where
         F: FnMut(<T as SliceLike>::Element);
 }
 
-macro_rules! implement_slice_source_collection_for_tuples {
+impl<T, U> SliceMoveSourceCollection<T> for U
+where
+    T: SliceLike + ?Sized,
+    U: Array,
+    <U as Array>::Item: SliceMoveSource<T>,
+{
+    fn move_all_elements<F>(self, mut f: F)
+    where
+        F: FnMut(<T as SliceLike>::Element),
+    {
+        unsafe {
+            for source in self.as_slice() {
+                ptr::read(source).move_elements(&mut f);
+            }
+
+            forget(self);
+        }
+    }
+}
+
+/// Macro for generating trait implementations for tuples.
+macro_rules! generate_tuple_trait_impls {
     ($($name:ident,)+) => {
         impl<T, $($name,)*> SliceSourceCollection<T> for ($($name,)*)
         where
@@ -991,50 +1124,37 @@ macro_rules! implement_slice_source_collection_for_tuples {
             }
         }
 
-        implement_slice_source_collection_for_tuples!([REDUCE] $($name,)*);
+        generate_tuple_trait_impls!([REDUCE] $($name,)*);
     };
 
     () => {};
 
     ([REDUCE] $name:ident, $($remaining:ident,)*) => {
-        implement_slice_source_collection_for_tuples!($($remaining,)*);
+        generate_tuple_trait_impls!($($remaining,)*);
     }
 }
 
-implement_slice_source_collection_for_tuples!(
-    T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11,
-);
+generate_tuple_trait_impls!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11,);
 
 /// Macro for generating trait implementations for static arrays.
 macro_rules! generate_array_trait_impls {
     ($size:expr) => {
-        impl<T> Buffer for [T; $size]
+        unsafe impl<T> Array for [T; $size]
         where
-            T: ByteData,
+            T: Sized,
         {
+            type Item = T;
+
             #[inline]
-            fn as_bytes(&self) -> &[u8] {
-                let data = &self[..];
-                unsafe { slice::from_raw_parts (
-                    data.as_ptr() as *const u8,
-                    data.len() * size_of::<T>(),
-                ) }
+            fn as_slice(&self) -> &[T] {
+                &self[..]
             }
 
             #[inline]
-            fn as_bytes_mut(&mut self) -> &mut [u8] {
-                let data = &mut self[..];
-                unsafe { slice::from_raw_parts_mut (
-                    data.as_mut_ptr() as *mut u8,
-                    data.len() * size_of::<T>(),
-                ) }
+            fn as_mut_slice(&mut self) -> &mut [T] {
+                &mut self[..]
             }
         }
-
-        unsafe impl<T> StaticBuffer for [T; $size]
-        where
-            T: ByteData,
-        {}
 
         unsafe impl<'marker, T> IntoSliceAllocation<'marker, [T]>
             for Allocation<'marker, [T; $size]>
@@ -1049,163 +1169,6 @@ macro_rules! generate_array_trait_impls {
             #[inline]
             fn as_mut_slice_ptr(&mut self) -> *mut [T] {
                 unsafe { &mut (*self.data.as_mut())[..] }
-            }
-        }
-
-        impl<T> SliceSource<[T]> for [T; $size] {
-            #[inline]
-            fn as_slice_like(&self) -> &[T] {
-                &self[..]
-            }
-        }
-
-        impl<'a, T> SliceSource<[T]> for &'a [T; $size] {
-            #[inline]
-            fn as_slice_like(&self) -> &[T] {
-                &self[..]
-            }
-        }
-
-        #[cfg(any(feature = "std", feature = "unstable"))]
-        impl<T> SliceSource<[T]> for Box<[T; $size]> {
-            #[inline]
-            fn as_slice_like(&self) -> &[T] {
-                &self[..]
-            }
-        }
-
-        #[cfg(any(feature = "std", feature = "unstable"))]
-        impl<'a, T> SliceSource<[T]> for &'a Box<[T; $size]> {
-            #[inline]
-            fn as_slice_like(&self) -> &[T] {
-                &self[..]
-            }
-        }
-
-        impl<T> SliceMoveSource<[T]> for [T; $size] {
-            fn move_elements<F>(self, mut f: F)
-            where
-                F: FnMut(T),
-            {
-                for item in &self[..] {
-                    unsafe {
-                        f(ptr::read(item));
-                    }
-                }
-
-                forget(self);
-            }
-        }
-
-        impl<'a, T> SliceMoveSource<[T]> for &'a [T; $size]
-        where
-            T: Copy,
-        {
-            fn move_elements<F>(self, mut f: F)
-            where
-                F: FnMut(T),
-            {
-                for item in &self[..] {
-                    f(*item);
-                }
-            }
-        }
-
-        #[cfg(any(feature = "std", feature = "unstable"))]
-        impl<T> SliceMoveSource<[T]> for Box<[T; $size]> {
-            fn move_elements<F>(self, mut f: F)
-            where
-                F: FnMut(T),
-            {
-                unsafe {
-                    for item in &self[..] {
-                        f(ptr::read(item));
-                    }
-
-                    Box::from_raw(Box::into_raw(self) as *mut ManuallyDrop<[T; $size]>);
-                }
-            }
-        }
-
-        #[cfg(any(feature = "std", feature = "unstable"))]
-        impl<'a, T> SliceMoveSource<[T]> for &'a Box<[T; $size]>
-        where
-            T: Copy,
-        {
-            fn move_elements<F>(self, mut f: F)
-            where
-                F: FnMut(T),
-            {
-                for item in &self[..] {
-                    f(*item);
-                }
-            }
-        }
-
-        impl<T, U> SliceSourceCollection<T> for [U; $size]
-        where
-            T: SliceLike + ?Sized,
-            U: SliceSource<T>,
-        {
-            fn for_each<F>(&self, mut f: F)
-            where
-                F: for<'a> FnMut(&'a SliceSource<T>)
-            {
-                for index in 0..$size {
-                    f(&self[index]);
-                }
-            }
-        }
-
-        impl<'b, T, U> SliceSourceCollection<T> for &'b [U; $size]
-        where
-            T: SliceLike + ?Sized,
-            U: SliceSource<T>,
-        {
-            fn for_each<F>(&self, mut f: F)
-            where
-                F: for<'a> FnMut(&'a SliceSource<T>)
-            {
-                for index in 0..$size {
-                    f(&self[index]);
-                }
-            }
-        }
-
-        impl<T, U> SliceMoveSourceCollection<T> for [U; $size]
-        where
-            T: SliceLike + ?Sized,
-            U: SliceMoveSource<T>,
-        {
-            fn move_all_elements<F>(self, mut f: F)
-            where
-                F: FnMut(<T as SliceLike>::Element),
-            {
-                for source in &self[..] {
-                    unsafe {
-                        ptr::read(source).move_elements(&mut f);
-                    }
-                }
-
-                forget(self);
-            }
-        }
-
-        impl<'b, T, U> SliceMoveSourceCollection<T> for &'b [U; $size]
-        where
-            T: SliceLike + ?Sized,
-            <T as SliceLike>::Element: Copy,
-            U: SliceSource<T>,
-        {
-            fn move_all_elements<F>(self, mut f: F)
-            where
-                F: FnMut(<T as SliceLike>::Element),
-            {
-                for source in &self[..] {
-                    for item in source.as_slice_like().as_element_slice() {
-                        f(*item);
-                    }
-                }
             }
         }
     };
