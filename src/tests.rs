@@ -658,32 +658,57 @@ fn marker_extend_string_test() {
 /// possible leaks or unintentional dropping of elements.
 #[test]
 fn slice_move_source_collection_tuple_test() {
+    let scratchpad = Scratchpad::<[usize; 6], [usize; 1]>::static_new();
     let drop_count = Cell::new(0);
 
     {
-        let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
         let marker = scratchpad.mark_back().unwrap();
 
         let a = [DropCounter::new(&drop_count)];
-        let b = Box::new([DropCounter::new(&drop_count)]) as Box<[_]>;
-        let mut c = Vec::new();
-        c.push(DropCounter::new(&drop_count));
+
+        // `Box` and `Vec` may not be testable depending on the feature set,
+        // so use different types if they're not available.
+        #[cfg(any(feature = "std", feature = "unstable"))]
+        let (b, c) = {
+            let mut c = Vec::new();
+            c.push(DropCounter::new(&drop_count));
+            c.push(DropCounter::new(&drop_count));
+            c.push(DropCounter::new(&drop_count));
+
+            (
+                Box::new([
+                    DropCounter::new(&drop_count),
+                    DropCounter::new(&drop_count),
+                ]) as Box<[_]>,
+                c,
+            )
+        };
+
+        #[cfg(not(any(feature = "std", feature = "unstable")))]
+        let (b, c) = (
+            [DropCounter::new(&drop_count), DropCounter::new(&drop_count)],
+            [
+                DropCounter::new(&drop_count),
+                DropCounter::new(&drop_count),
+                DropCounter::new(&drop_count),
+            ],
+        );
 
         let _allocation = marker.concat_slices((a, b, c)).unwrap();
         assert_eq!(drop_count.get(), 0);
     }
 
-    assert_eq!(drop_count.get(), 3);
+    assert_eq!(drop_count.get(), 6);
 }
 
 /// Tests array implementations of `SliceMoveSourceCollection` use for
 /// possible leaks or unintentional dropping of elements.
 #[test]
 fn slice_move_source_collection_array_test() {
+    let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
     let drop_count = Cell::new(0);
 
     {
-        let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
         let marker = scratchpad.mark_back().unwrap();
 
         let a = [DropCounter::new(&drop_count)];
@@ -697,47 +722,49 @@ fn slice_move_source_collection_array_test() {
     assert_eq!(drop_count.get(), 3);
     drop_count.set(0);
 
+    #[cfg(any(feature = "std", feature = "unstable"))]
     {
-        let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
-        let marker = scratchpad.mark_back().unwrap();
+        {
+            let marker = scratchpad.mark_back().unwrap();
 
-        let a = Box::new([DropCounter::new(&drop_count)]) as Box<[_]>;
-        let b = Box::new([DropCounter::new(&drop_count)]) as Box<[_]>;
-        let c = Box::new([DropCounter::new(&drop_count)]) as Box<[_]>;
+            let a = Box::new([DropCounter::new(&drop_count)]) as Box<[_]>;
+            let b = Box::new([DropCounter::new(&drop_count)]) as Box<[_]>;
+            let c = Box::new([DropCounter::new(&drop_count)]) as Box<[_]>;
 
-        let _allocation = marker.concat_slices([a, b, c]).unwrap();
-        assert_eq!(drop_count.get(), 0);
+            let _allocation = marker.concat_slices([a, b, c]).unwrap();
+            assert_eq!(drop_count.get(), 0);
+        }
+
+        assert_eq!(drop_count.get(), 3);
+        drop_count.set(0);
+
+        {
+            let marker = scratchpad.mark_back().unwrap();
+
+            let mut a = Vec::new();
+            a.push(DropCounter::new(&drop_count));
+            let mut b = Vec::new();
+            b.push(DropCounter::new(&drop_count));
+            let mut c = Vec::new();
+            c.push(DropCounter::new(&drop_count));
+
+            let _allocation = marker.concat_slices([a, b, c]).unwrap();
+            assert_eq!(drop_count.get(), 0);
+        }
+
+        assert_eq!(drop_count.get(), 3);
     }
-
-    assert_eq!(drop_count.get(), 3);
-    drop_count.set(0);
-
-    {
-        let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
-        let marker = scratchpad.mark_back().unwrap();
-
-        let mut a = Vec::new();
-        a.push(DropCounter::new(&drop_count));
-        let mut b = Vec::new();
-        b.push(DropCounter::new(&drop_count));
-        let mut c = Vec::new();
-        c.push(DropCounter::new(&drop_count));
-
-        let _allocation = marker.concat_slices([a, b, c]).unwrap();
-        assert_eq!(drop_count.get(), 0);
-    }
-
-    assert_eq!(drop_count.get(), 3);
 }
 
 /// Tests vector implementations of `SliceMoveSourceCollection` use for
 /// possible leaks or unintentional dropping of elements.
 #[test]
+#[cfg(any(feature = "std", feature = "unstable"))]
 fn slice_move_source_collection_vec_test() {
+    let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
     let drop_count = Cell::new(0);
 
     {
-        let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
         let marker = scratchpad.mark_back().unwrap();
 
         let a = [DropCounter::new(&drop_count)];
@@ -757,7 +784,6 @@ fn slice_move_source_collection_vec_test() {
     drop_count.set(0);
 
     {
-        let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
         let marker = scratchpad.mark_back().unwrap();
 
         let a = Box::new([DropCounter::new(&drop_count)]) as Box<[_]>;
@@ -777,7 +803,6 @@ fn slice_move_source_collection_vec_test() {
     drop_count.set(0);
 
     {
-        let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
         let marker = scratchpad.mark_back().unwrap();
 
         let mut a = Vec::new();
@@ -802,11 +827,12 @@ fn slice_move_source_collection_vec_test() {
 /// Tests boxed slice implementations of `SliceMoveSourceCollection` use for
 /// possible leaks or unintentional dropping of elements.
 #[test]
+#[cfg(any(feature = "std", feature = "unstable"))]
 fn slice_move_source_collection_boxed_slice_test() {
+    let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
     let drop_count = Cell::new(0);
 
     {
-        let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
         let marker = scratchpad.mark_back().unwrap();
 
         let a = [DropCounter::new(&drop_count)];
@@ -823,7 +849,6 @@ fn slice_move_source_collection_boxed_slice_test() {
     drop_count.set(0);
 
     {
-        let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
         let marker = scratchpad.mark_back().unwrap();
 
         let a = Box::new([DropCounter::new(&drop_count)]) as Box<[_]>;
@@ -840,7 +865,6 @@ fn slice_move_source_collection_boxed_slice_test() {
     drop_count.set(0);
 
     {
-        let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
         let marker = scratchpad.mark_back().unwrap();
 
         let mut a = Vec::new();
