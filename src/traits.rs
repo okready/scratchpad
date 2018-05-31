@@ -997,6 +997,85 @@ where
     }
 }
 
+impl<'b, T, U> SliceSourceCollection<T> for &'b [U]
+where
+    T: SliceLike + ?Sized,
+    U: SliceSource<T>,
+{
+    fn for_each<F>(&self, mut f: F)
+    where
+        F: for<'a> FnMut(&'a SliceSource<T>),
+    {
+        for source in *self {
+            f(source);
+        }
+    }
+}
+
+#[cfg(any(feature = "std", feature = "unstable"))]
+impl<T, U> SliceSourceCollection<T> for Box<[U]>
+where
+    T: SliceLike + ?Sized,
+    U: SliceSource<T>,
+{
+    fn for_each<F>(&self, mut f: F)
+    where
+        F: for<'a> FnMut(&'a SliceSource<T>),
+    {
+        for source in &**self {
+            f(source);
+        }
+    }
+}
+
+#[cfg(any(feature = "std", feature = "unstable"))]
+impl<T, U> SliceSourceCollection<T> for Vec<U>
+where
+    T: SliceLike + ?Sized,
+    U: SliceSource<T>,
+{
+    fn for_each<F>(&self, mut f: F)
+    where
+        F: for<'a> FnMut(&'a SliceSource<T>),
+    {
+        for source in self {
+            f(source);
+        }
+    }
+}
+
+#[cfg(any(feature = "std", feature = "unstable"))]
+impl<'b, T, U> SliceSourceCollection<T> for &'b Box<[U]>
+where
+    T: SliceLike + ?Sized,
+    U: SliceSource<T>,
+{
+    fn for_each<F>(&self, mut f: F)
+    where
+        F: for<'a> FnMut(&'a SliceSource<T>),
+    {
+        for source in &***self {
+            f(source);
+        }
+    }
+}
+
+#[cfg(any(feature = "std", feature = "unstable"))]
+impl<'b, T, U> SliceSourceCollection<T> for &'b Vec<U>
+where
+    T: SliceLike + ?Sized,
+    U: SliceSource<T>,
+{
+    fn for_each<F>(&self, mut f: F)
+    where
+        F: for<'a> FnMut(&'a SliceSource<T>),
+    {
+        for source in *self {
+            f(source);
+        }
+    }
+}
+
 /// Subtrait of [`SliceSourceCollection`] for taking ownership of the contents
 /// of a collection of slice sources.
 ///
@@ -1043,6 +1122,98 @@ where
             }
 
             forget(self);
+        }
+    }
+}
+
+impl<'b, T, U> SliceMoveSourceCollection<T> for &'b [U]
+where
+    T: SliceLike + ?Sized,
+    <T as SliceLike>::Element: Copy,
+    U: SliceSource<T>,
+{
+    fn move_all_elements<F>(self, mut f: F)
+    where
+        F: FnMut(<T as SliceLike>::Element),
+    {
+        for source in self {
+            for item in source.as_slice_like().as_element_slice() {
+                f(*item);
+            }
+        }
+    }
+}
+
+#[cfg(any(feature = "std", feature = "unstable"))]
+impl<T, U> SliceMoveSourceCollection<T> for Box<[U]>
+where
+    T: SliceLike + ?Sized,
+    U: SliceMoveSource<T>,
+{
+    fn move_all_elements<F>(self, mut f: F)
+    where
+        F: FnMut(<T as SliceLike>::Element),
+    {
+        unsafe {
+            for source in &*self {
+                ptr::read(source).move_elements(&mut f);
+            }
+
+            Box::from_raw(Box::into_raw(self) as *mut [ManuallyDrop<U>]);
+        }
+    }
+}
+
+#[cfg(any(feature = "std", feature = "unstable"))]
+impl<T, U> SliceMoveSourceCollection<T> for Vec<U>
+where
+    T: SliceLike + ?Sized,
+    U: SliceMoveSource<T>,
+{
+    fn move_all_elements<F>(self, mut f: F)
+    where
+        F: FnMut(<T as SliceLike>::Element),
+    {
+        for source in self {
+            source.move_elements(&mut f);
+        }
+    }
+}
+
+#[cfg(any(feature = "std", feature = "unstable"))]
+impl<'b, T, U> SliceMoveSourceCollection<T> for &'b Box<[U]>
+where
+    T: SliceLike + ?Sized,
+    <T as SliceLike>::Element: Copy,
+    U: SliceSource<T>,
+{
+    fn move_all_elements<F>(self, mut f: F)
+    where
+        F: FnMut(<T as SliceLike>::Element),
+    {
+        for source in &**self {
+            for item in source.as_slice_like().as_element_slice() {
+                f(*item);
+            }
+        }
+    }
+}
+
+#[cfg(any(feature = "std", feature = "unstable"))]
+impl<'b, T, U> SliceMoveSourceCollection<T> for &'b Vec<U>
+where
+    T: SliceLike + ?Sized,
+    <T as SliceLike>::Element: Copy,
+    U: SliceSource<T>,
+{
+    fn move_all_elements<F>(self, mut f: F)
+    where
+        F: FnMut(<T as SliceLike>::Element),
+    {
+        for source in self {
+            for item in source.as_slice_like().as_element_slice() {
+                f(*item);
+            }
         }
     }
 }

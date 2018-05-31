@@ -10,8 +10,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   various source data types.
 - `SliceMoveSource` subtrait of `SliceSource` that allows for taking ownership
   of the contents of a slice.
-- `SliceSourceCollection` trait for abstracting collections (namely tuples and
-  arrays) of `SliceSource` objects.
+- `SliceSourceCollection` trait for abstracting collections of `SliceSource`
+  objects.
 - `SliceMoveSourceCollection` subtrait of `SliceSourceCollection` that allows
   for taking ownership of the slices provided by all `SliceSource` objects in
   a collection.
