@@ -654,6 +654,211 @@ fn marker_extend_string_test() {
     assert_eq!(&*foobar, "foobar");
 }
 
+/// Tests tuple implementations of `SliceMoveSourceCollection` use for
+/// possible leaks or unintentional dropping of elements.
+#[test]
+fn slice_move_source_collection_tuple_test() {
+    let drop_count = Cell::new(0);
+
+    {
+        let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
+        let marker = scratchpad.mark_back().unwrap();
+
+        let a = [DropCounter::new(&drop_count)];
+        let b = Box::new([DropCounter::new(&drop_count)]) as Box<[_]>;
+        let mut c = Vec::new();
+        c.push(DropCounter::new(&drop_count));
+
+        let _allocation = marker.concat_slices((a, b, c)).unwrap();
+        assert_eq!(drop_count.get(), 0);
+    }
+
+    assert_eq!(drop_count.get(), 3);
+}
+
+/// Tests array implementations of `SliceMoveSourceCollection` use for
+/// possible leaks or unintentional dropping of elements.
+#[test]
+fn slice_move_source_collection_array_test() {
+    let drop_count = Cell::new(0);
+
+    {
+        let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
+        let marker = scratchpad.mark_back().unwrap();
+
+        let a = [DropCounter::new(&drop_count)];
+        let b = [DropCounter::new(&drop_count)];
+        let c = [DropCounter::new(&drop_count)];
+
+        let _allocation = marker.concat_slices([a, b, c]).unwrap();
+        assert_eq!(drop_count.get(), 0);
+    }
+
+    assert_eq!(drop_count.get(), 3);
+    drop_count.set(0);
+
+    {
+        let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
+        let marker = scratchpad.mark_back().unwrap();
+
+        let a = Box::new([DropCounter::new(&drop_count)]) as Box<[_]>;
+        let b = Box::new([DropCounter::new(&drop_count)]) as Box<[_]>;
+        let c = Box::new([DropCounter::new(&drop_count)]) as Box<[_]>;
+
+        let _allocation = marker.concat_slices([a, b, c]).unwrap();
+        assert_eq!(drop_count.get(), 0);
+    }
+
+    assert_eq!(drop_count.get(), 3);
+    drop_count.set(0);
+
+    {
+        let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
+        let marker = scratchpad.mark_back().unwrap();
+
+        let mut a = Vec::new();
+        a.push(DropCounter::new(&drop_count));
+        let mut b = Vec::new();
+        b.push(DropCounter::new(&drop_count));
+        let mut c = Vec::new();
+        c.push(DropCounter::new(&drop_count));
+
+        let _allocation = marker.concat_slices([a, b, c]).unwrap();
+        assert_eq!(drop_count.get(), 0);
+    }
+
+    assert_eq!(drop_count.get(), 3);
+}
+
+/// Tests vector implementations of `SliceMoveSourceCollection` use for
+/// possible leaks or unintentional dropping of elements.
+#[test]
+fn slice_move_source_collection_vec_test() {
+    let drop_count = Cell::new(0);
+
+    {
+        let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
+        let marker = scratchpad.mark_back().unwrap();
+
+        let a = [DropCounter::new(&drop_count)];
+        let b = [DropCounter::new(&drop_count)];
+        let c = [DropCounter::new(&drop_count)];
+
+        let mut sources = Vec::new();
+        sources.push(a);
+        sources.push(b);
+        sources.push(c);
+
+        let _allocation = marker.concat_slices(sources).unwrap();
+        assert_eq!(drop_count.get(), 0);
+    }
+
+    assert_eq!(drop_count.get(), 3);
+    drop_count.set(0);
+
+    {
+        let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
+        let marker = scratchpad.mark_back().unwrap();
+
+        let a = Box::new([DropCounter::new(&drop_count)]) as Box<[_]>;
+        let b = Box::new([DropCounter::new(&drop_count)]) as Box<[_]>;
+        let c = Box::new([DropCounter::new(&drop_count)]) as Box<[_]>;
+
+        let mut sources = Vec::new();
+        sources.push(a);
+        sources.push(b);
+        sources.push(c);
+
+        let _allocation = marker.concat_slices(sources).unwrap();
+        assert_eq!(drop_count.get(), 0);
+    }
+
+    assert_eq!(drop_count.get(), 3);
+    drop_count.set(0);
+
+    {
+        let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
+        let marker = scratchpad.mark_back().unwrap();
+
+        let mut a = Vec::new();
+        a.push(DropCounter::new(&drop_count));
+        let mut b = Vec::new();
+        b.push(DropCounter::new(&drop_count));
+        let mut c = Vec::new();
+        c.push(DropCounter::new(&drop_count));
+
+        let mut sources = Vec::new();
+        sources.push(a);
+        sources.push(b);
+        sources.push(c);
+
+        let _allocation = marker.concat_slices(sources).unwrap();
+        assert_eq!(drop_count.get(), 0);
+    }
+
+    assert_eq!(drop_count.get(), 3);
+}
+
+/// Tests boxed slice implementations of `SliceMoveSourceCollection` use for
+/// possible leaks or unintentional dropping of elements.
+#[test]
+fn slice_move_source_collection_boxed_slice_test() {
+    let drop_count = Cell::new(0);
+
+    {
+        let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
+        let marker = scratchpad.mark_back().unwrap();
+
+        let a = [DropCounter::new(&drop_count)];
+        let b = [DropCounter::new(&drop_count)];
+        let c = [DropCounter::new(&drop_count)];
+
+        let _allocation = marker
+            .concat_slices(Box::new([a, b, c]) as Box<[[_; 1]]>)
+            .unwrap();
+        assert_eq!(drop_count.get(), 0);
+    }
+
+    assert_eq!(drop_count.get(), 3);
+    drop_count.set(0);
+
+    {
+        let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
+        let marker = scratchpad.mark_back().unwrap();
+
+        let a = Box::new([DropCounter::new(&drop_count)]) as Box<[_]>;
+        let b = Box::new([DropCounter::new(&drop_count)]) as Box<[_]>;
+        let c = Box::new([DropCounter::new(&drop_count)]) as Box<[_]>;
+
+        let _allocation = marker
+            .concat_slices(Box::new([a, b, c]) as Box<[Box<[_]>]>)
+            .unwrap();
+        assert_eq!(drop_count.get(), 0);
+    }
+
+    assert_eq!(drop_count.get(), 3);
+    drop_count.set(0);
+
+    {
+        let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
+        let marker = scratchpad.mark_back().unwrap();
+
+        let mut a = Vec::new();
+        a.push(DropCounter::new(&drop_count));
+        let mut b = Vec::new();
+        b.push(DropCounter::new(&drop_count));
+        let mut c = Vec::new();
+        c.push(DropCounter::new(&drop_count));
+
+        let _allocation = marker
+            .concat_slices(Box::new([a, b, c]) as Box<[Vec<_>]>)
+            .unwrap();
+        assert_eq!(drop_count.get(), 0);
+    }
+
+    assert_eq!(drop_count.get(), 3);
+}
+
 /// Verifies ZST allocations work properly.
 #[test]
 fn zst_test() {
