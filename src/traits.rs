@@ -492,6 +492,13 @@ where
     }
 }
 
+unsafe impl IntoMutSliceLikePtr<[u8]> for str {
+    #[inline]
+    fn into_mut_slice_like_ptr(ptr: *mut str) -> *mut [u8] {
+        unsafe { (*ptr).as_bytes_mut() }
+    }
+}
+
 /// Trait for sources of slice data provided to [`Marker`] trait methods.
 ///
 /// `SliceSource` is implemented for static arrays and slice references. If

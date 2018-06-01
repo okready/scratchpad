@@ -639,7 +639,7 @@ fn allocation_concat_string_test() {
 
     let foo = marker.allocate_slice_copy("foo").unwrap();
     let bar = marker.allocate_slice_copy("bar").unwrap();
-    let foobar = foo.concat(bar).unwrap();
+    let foobar: Allocation<str> = foo.concat(bar).unwrap();
     assert_eq!(&*foobar, "foobar");
 }
 

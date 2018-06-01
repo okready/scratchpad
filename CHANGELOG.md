@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   `SliceLike` pointers. This replaces the `IntoSliceLikeAllocation` trait for
   determining which `Allocation` types can be converted to slices and
   slice-like types.
+- Missing support for converting `str` allocations to `[u8]` allocations.
 
 ### Changed
 - Moved `into_slice_like_allocation()` away from the `IntoSliceLikeAllocation`
