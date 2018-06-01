@@ -13,7 +13,7 @@ use core::ptr;
 use core::slice;
 
 use super::{
-    ConcatenateSlice, Error, ErrorKind, IntoSliceLikeAllocation, SliceLike,
+    ConcatenateSlice, Error, ErrorKind, IntoMutSliceLikePtr, SliceLike,
 };
 use core::marker::PhantomData;
 use core::mem::forget;
@@ -87,6 +87,53 @@ impl<'marker, T> Allocation<'marker, T>
 where
     T: ?Sized,
 {
+    /// Converts this allocation into an allocation of a compatible
+    /// [`SliceLike`] type without altering the allocation data.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::{Allocation, Scratchpad};
+    ///
+    /// let scratchpad = Scratchpad::<[i32; 6], [usize; 1]>::static_new();
+    /// let marker = scratchpad.mark_front().unwrap();
+    ///
+    /// let scalar = marker.allocate(3).unwrap();
+    /// assert_eq!(*scalar.into_slice_like_allocation(), [3]);
+    ///
+    /// let slice = marker.allocate_array_with(2, |index| index as i32)
+    ///     .unwrap();
+    /// assert_eq!(*slice.into_slice_like_allocation(), [0, 1]);
+    ///
+    /// // Automatic conversion of an array into a slice is ambiguous, as the
+    /// // compiler can't tell whether we want a slice with the same length as
+    /// // the array or a slice with only one element containing the entire
+    /// // array. We must explicitly specify the slice type in this example.
+    /// let array = marker.allocate([9, 8, 7]).unwrap();
+    /// let array_slice: Allocation<[i32]> = array
+    ///     .into_slice_like_allocation();
+    /// assert_eq!(*array_slice, [9, 8, 7]);
+    /// ```
+    ///
+    /// [`SliceLike`]: trait.SliceLike.html
+    #[inline]
+    pub fn into_slice_like_allocation<U>(self) -> Allocation<'marker, U>
+    where
+        T: IntoMutSliceLikePtr<U>,
+        U: SliceLike + ?Sized,
+    {
+        let data = unsafe {
+            NonNull::new_unchecked(T::into_mut_slice_like_ptr(
+                self.data.as_ptr(),
+            ))
+        };
+        forget(self);
+        Allocation {
+            data,
+            _phantom: PhantomData,
+        }
+    }
+
     /// Combines this allocation with an allocation immediately following it
     /// in memory, returning a single slice allocation.
     ///
@@ -172,14 +219,15 @@ where
         Error<(Allocation<'marker, T>, Allocation<'marker, V>)>,
     >
     where
+        T: IntoMutSliceLikePtr<U>,
         U: ConcatenateSlice + ?Sized,
-        V: ?Sized,
-        Allocation<'marker, T>: IntoSliceLikeAllocation<'marker, U>,
-        Allocation<'marker, V>: IntoSliceLikeAllocation<'marker, U>,
+        V: IntoMutSliceLikePtr<U> + ?Sized,
     {
         unsafe {
-            let data0 = (*self.as_slice_like_ptr()).as_element_slice();
-            let data1 = (*other.as_slice_like_ptr()).as_element_slice();
+            let data0 = (*T::into_mut_slice_like_ptr(self.data.as_ptr()))
+                .as_element_slice();
+            let data1 = (*V::into_mut_slice_like_ptr(other.data.as_ptr()))
+                .as_element_slice();
             let data0_len = data0.len();
             let data1_len = data1.len();
             assert!(data0_len <= ::core::isize::MAX as usize);
@@ -235,17 +283,18 @@ where
     /// [`concat()`]: #method.concat
     #[inline]
     pub unsafe fn concat_unchecked<U, V>(
-        mut self,
-        mut other: Allocation<'marker, V>,
+        self,
+        other: Allocation<'marker, V>,
     ) -> Allocation<'marker, U>
     where
+        T: IntoMutSliceLikePtr<U>,
         U: ConcatenateSlice + ?Sized,
-        V: ?Sized,
-        Allocation<'marker, T>: IntoSliceLikeAllocation<'marker, U>,
-        Allocation<'marker, V>: IntoSliceLikeAllocation<'marker, U>,
+        V: IntoMutSliceLikePtr<U> + ?Sized,
     {
-        let data0 = (*self.as_mut_slice_like_ptr()).as_element_slice_mut();
-        let data1 = (*other.as_mut_slice_like_ptr()).as_element_slice_mut();
+        let data0 = (*T::into_mut_slice_like_ptr(self.data.as_ptr()))
+            .as_element_slice_mut();
+        let data1 = (*V::into_mut_slice_like_ptr(other.data.as_ptr()))
+            .as_element_slice_mut();
 
         forget(self);
         forget(other);

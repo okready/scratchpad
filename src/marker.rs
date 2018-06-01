@@ -13,7 +13,7 @@ use core::slice;
 
 use super::{
     Allocation, Buffer, ConcatenateSlice, Error, ErrorKind,
-    IntoSliceLikeAllocation, Scratchpad, SliceLike, SliceMoveSource,
+    IntoMutSliceLikePtr, Scratchpad, SliceLike, SliceMoveSource,
     SliceMoveSourceCollection, SliceSource, SliceSourceCollection, Tracking,
 };
 use core::marker::PhantomData;
@@ -456,8 +456,7 @@ pub trait Marker {
     ) -> Result<Allocation<'marker, T>, Error<(Allocation<'marker, U>, V)>>
     where
         T: ConcatenateSlice + ?Sized,
-        U: ?Sized,
-        Allocation<'marker, U>: IntoSliceLikeAllocation<'marker, T>,
+        U: IntoMutSliceLikePtr<T> + ?Sized,
         V: SliceMoveSource<T>,
     {
         // Verify that the allocation is at the end of the marker.
@@ -503,9 +502,7 @@ pub trait Marker {
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::{
-    ///     Allocation, IntoSliceLikeAllocation, Marker, Scratchpad
-    /// };
+    /// use scratchpad::{Allocation, Marker, Scratchpad};
     ///
     /// let scratchpad = Scratchpad::<[u32; 5], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_front().unwrap();
@@ -529,8 +526,7 @@ pub trait Marker {
     where
         T: ConcatenateSlice + ?Sized,
         <T as SliceLike>::Element: Clone,
-        U: ?Sized,
-        Allocation<'marker, U>: IntoSliceLikeAllocation<'marker, T>,
+        U: IntoMutSliceLikePtr<T> + ?Sized,
         V: SliceSource<T>,
     {
         // Verify that the allocation is at the end of the marker.
@@ -576,9 +572,7 @@ pub trait Marker {
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::{
-    ///     Allocation, IntoSliceLikeAllocation, Marker, Scratchpad
-    /// };
+    /// use scratchpad::{Allocation, Marker, Scratchpad};
     ///
     /// let scratchpad = Scratchpad::<[u32; 5], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_front().unwrap();
@@ -602,8 +596,7 @@ pub trait Marker {
     where
         T: ConcatenateSlice + ?Sized,
         <T as SliceLike>::Element: Copy,
-        U: ?Sized,
-        Allocation<'marker, U>: IntoSliceLikeAllocation<'marker, T>,
+        U: IntoMutSliceLikePtr<T> + ?Sized,
         V: SliceSource<T>,
     {
         // Verify that the allocation is at the end of the marker.
@@ -842,8 +835,7 @@ pub trait Marker {
         allocation: &Allocation<'marker, T>,
     ) -> bool
     where
-        T: ?Sized,
-        Allocation<'marker, T>: IntoSliceLikeAllocation<'marker, U>,
+        T: IntoMutSliceLikePtr<U> + ?Sized,
         U: SliceLike + ?Sized;
 
     /// Extends the first allocation with the second allocation by either
@@ -868,10 +860,8 @@ pub trait Marker {
     ) -> Allocation<'marker, T>
     where
         T: ConcatenateSlice + ?Sized,
-        U: ?Sized,
-        Allocation<'marker, U>: IntoSliceLikeAllocation<'marker, T>,
-        V: ?Sized,
-        Allocation<'marker, V>: IntoSliceLikeAllocation<'marker, T>;
+        U: IntoMutSliceLikePtr<T> + ?Sized,
+        V: IntoMutSliceLikePtr<T> + ?Sized;
 }
 
 /// [`Scratchpad`] marker for allocations from the front of the allocation
@@ -971,13 +961,13 @@ where
         allocation: &Allocation<'marker, T>,
     ) -> bool
     where
-        T: ?Sized,
-        Allocation<'marker, T>: IntoSliceLikeAllocation<'marker, U>,
+        T: IntoMutSliceLikePtr<U> + ?Sized,
         U: SliceLike + ?Sized,
     {
-        let data = IntoSliceLikeAllocation::<'marker, U>::as_slice_like(
-            allocation,
-        ).as_element_slice();
+        let data = unsafe {
+            (*T::into_mut_slice_like_ptr(allocation.data.as_ptr()))
+                .as_element_slice()
+        };
         let data_len = data.len();
         assert!(data_len <= ::core::isize::MAX as usize);
 
@@ -1001,10 +991,8 @@ where
     ) -> Allocation<'marker, T>
     where
         T: ConcatenateSlice + ?Sized,
-        U: ?Sized,
-        Allocation<'marker, U>: IntoSliceLikeAllocation<'marker, T>,
-        V: ?Sized,
-        Allocation<'marker, V>: IntoSliceLikeAllocation<'marker, T>,
+        U: IntoMutSliceLikePtr<T> + ?Sized,
+        V: IntoMutSliceLikePtr<T> + ?Sized,
     {
         base.concat_unchecked(extension)
     }
@@ -1314,8 +1302,7 @@ where
     ) -> Result<Allocation<'marker, T>, Error<(Allocation<'marker, U>, V)>>
     where
         T: ConcatenateSlice + ?Sized,
-        U: ?Sized,
-        Allocation<'marker, U>: IntoSliceLikeAllocation<'marker, T>,
+        U: IntoMutSliceLikePtr<T> + ?Sized,
         V: SliceMoveSource<T>,
     {
         Marker::extend(self, allocation, values)
@@ -1342,7 +1329,7 @@ where
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::{Allocation, IntoSliceLikeAllocation, Scratchpad};
+    /// use scratchpad::{Allocation, Scratchpad};
     ///
     /// let scratchpad = Scratchpad::<[u32; 5], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_front().unwrap();
@@ -1364,8 +1351,7 @@ where
     where
         T: ConcatenateSlice + ?Sized,
         <T as SliceLike>::Element: Clone,
-        U: ?Sized,
-        Allocation<'marker, U>: IntoSliceLikeAllocation<'marker, T>,
+        U: IntoMutSliceLikePtr<T> + ?Sized,
         V: SliceSource<T>,
     {
         Marker::extend_clone(self, allocation, values)
@@ -1392,7 +1378,7 @@ where
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::{Allocation, IntoSliceLikeAllocation, Scratchpad};
+    /// use scratchpad::{Allocation, Scratchpad};
     ///
     /// let scratchpad = Scratchpad::<[u32; 5], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_front().unwrap();
@@ -1414,8 +1400,7 @@ where
     where
         T: ConcatenateSlice + ?Sized,
         <T as SliceLike>::Element: Copy,
-        U: ?Sized,
-        Allocation<'marker, U>: IntoSliceLikeAllocation<'marker, T>,
+        U: IntoMutSliceLikePtr<T> + ?Sized,
         V: SliceSource<T>,
     {
         Marker::extend_copy(self, allocation, values)
@@ -1638,13 +1623,13 @@ where
         allocation: &Allocation<'marker, T>,
     ) -> bool
     where
-        T: ?Sized,
-        Allocation<'marker, T>: IntoSliceLikeAllocation<'marker, U>,
+        T: IntoMutSliceLikePtr<U> + ?Sized,
         U: SliceLike + ?Sized,
     {
-        let data = IntoSliceLikeAllocation::<'marker, U>::as_slice_like(
-            allocation,
-        ).as_element_slice();
+        let data = unsafe {
+            (*T::into_mut_slice_like_ptr(allocation.data.as_ptr()))
+                .as_element_slice()
+        };
 
         let data_start = data.as_ptr();
 
@@ -1665,10 +1650,8 @@ where
     ) -> Allocation<'marker, T>
     where
         T: ConcatenateSlice + ?Sized,
-        U: ?Sized,
-        Allocation<'marker, U>: IntoSliceLikeAllocation<'marker, T>,
-        V: ?Sized,
-        Allocation<'marker, V>: IntoSliceLikeAllocation<'marker, T>,
+        U: IntoMutSliceLikePtr<T> + ?Sized,
+        V: IntoMutSliceLikePtr<T> + ?Sized,
     {
         extension.concat_unchecked(base)
     }
@@ -1978,8 +1961,7 @@ where
     ) -> Result<Allocation<'marker, T>, Error<(Allocation<'marker, U>, V)>>
     where
         T: ConcatenateSlice + ?Sized,
-        U: ?Sized,
-        Allocation<'marker, U>: IntoSliceLikeAllocation<'marker, T>,
+        U: IntoMutSliceLikePtr<T> + ?Sized,
         V: SliceMoveSource<T>,
     {
         Marker::extend(self, allocation, values)
@@ -2006,7 +1988,7 @@ where
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::{Allocation, IntoSliceLikeAllocation, Scratchpad};
+    /// use scratchpad::{Allocation, Scratchpad};
     ///
     /// let scratchpad = Scratchpad::<[u32; 5], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_back().unwrap();
@@ -2028,8 +2010,7 @@ where
     where
         T: ConcatenateSlice + ?Sized,
         <T as SliceLike>::Element: Clone,
-        U: ?Sized,
-        Allocation<'marker, U>: IntoSliceLikeAllocation<'marker, T>,
+        U: IntoMutSliceLikePtr<T> + ?Sized,
         V: SliceSource<T>,
     {
         Marker::extend_clone(self, allocation, values)
@@ -2056,7 +2037,7 @@ where
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::{Allocation, IntoSliceLikeAllocation, Scratchpad};
+    /// use scratchpad::{Allocation, Scratchpad};
     ///
     /// let scratchpad = Scratchpad::<[u32; 5], [usize; 1]>::static_new();
     /// let marker = scratchpad.mark_back().unwrap();
@@ -2078,8 +2059,7 @@ where
     where
         T: ConcatenateSlice + ?Sized,
         <T as SliceLike>::Element: Copy,
-        U: ?Sized,
-        Allocation<'marker, U>: IntoSliceLikeAllocation<'marker, T>,
+        U: IntoMutSliceLikePtr<T> + ?Sized,
         V: SliceSource<T>,
     {
         Marker::extend_copy(self, allocation, values)

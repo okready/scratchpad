@@ -12,10 +12,8 @@ use core::ptr;
 use core::slice;
 use core::str;
 
-use super::{Allocation, CacheAligned};
-use core::marker::PhantomData;
+use super::CacheAligned;
 use core::mem::{forget, size_of};
-use core::ptr::NonNull;
 
 #[cfg(any(feature = "std", feature = "unstable"))]
 use super::{Box, Vec};
@@ -439,265 +437,58 @@ pub trait ConcatenateSlice: SliceLike {}
 impl<T> ConcatenateSlice for [T] {}
 impl ConcatenateSlice for str {}
 
-/// Trait for safely converting an [`Allocation`] of a given type into a
-/// [`SliceLike`] allocation without losing or altering any of the allocation
-/// data.
-///
-/// The [`into_slice_like_allocation()`] and
-/// [`into_element_slice_allocation()`] methods perform permanent conversions
-/// of an allocation into a slice allocation. For temporary access to the
-/// contents of an allocation as a slice, the [`as_slice_like()`],
-/// [`as_mut_slice_like()`], [`as_slice_like_ptr()`], and
-/// [`as_mut_slice_like_ptr()`] methods are also available.
+/// Trait for reinterpreting a pointer to a given type as a compatible
+/// [`SliceLike`] pointer that uses the exact same backing memory.
 ///
 /// # Safety
 ///
-/// Implementing this trait implies that a type can be safely consumed when
-/// converting into a slice allocation, specifically the [`Allocation`] types
-/// for which it is already implemented by this crate. Incorrectly
-/// implementing it for other types can result in undefined behavior or
-/// runtime instability.
+/// This trait is marked as unsafe due to the potential for data loss if
+/// implemented incorrectly. It is used within this crate to determine which
+/// slice conversions are valid for a given [`Allocation`] without requiring
+/// the allocated data to be modified in any way. The source and destination
+/// types must use the same exact storage memory, and dropping the data stored
+/// in the destination type must also perform any cleanup required by the
+/// original source type.
 ///
 /// [`Allocation`]: struct.Allocation.html
-/// [`as_mut_slice_like()`]: #tymethod.as_mut_slice_like
-/// [`as_mut_slice_like_ptr()`]: #method.as_mut_slice_like_ptr
-/// [`as_slice_like()`]: #tymethod.as_slice_like
-/// [`as_slice_like_ptr()`]: #method.as_slice_like_ptr
-/// [`into_slice_like_allocation()`]: #method.into_slice_like_allocation
-/// [`into_element_slice_allocation()`]: #method.into_element_slice_allocation
 /// [`SliceLike`]: trait.SliceLike.html
-pub unsafe trait IntoSliceLikeAllocation<'marker, T>: Sized
+pub unsafe trait IntoMutSliceLikePtr<T>
 where
     T: SliceLike + ?Sized,
 {
-    /// Converts this allocation into an allocation of a compatible
-    /// [`SliceLike`] type without altering the allocation data.
+    /// Reinterprets a mutable pointer of this type as a [`SliceLike`]
+    /// pointer.
     ///
     /// # Examples
     ///
     /// ```
-    /// use scratchpad::{Allocation, IntoSliceLikeAllocation, Scratchpad};
+    /// use scratchpad::IntoMutSliceLikePtr;
     ///
-    /// let scratchpad = Scratchpad::<[i32; 6], [usize; 1]>::static_new();
-    /// let marker = scratchpad.mark_front().unwrap();
+    /// let mut value = 3.14159;
+    /// let value_ptr: *mut f64 = &mut value;
     ///
-    /// let scalar = marker.allocate(3).unwrap();
-    /// assert_eq!(*scalar.into_slice_like_allocation(), [3]);
-    ///
-    /// let slice = marker.allocate_array_with(2, |index| index as i32)
-    ///     .unwrap();
-    /// assert_eq!(*slice.into_slice_like_allocation(), [0, 1]);
-    ///
-    /// // Automatic conversion of an array into a slice is ambiguous, as the
-    /// // compiler can't tell whether we want a slice with the same length as
-    /// // the array or a slice with only one element containing the entire
-    /// // array. We must explicitly specify the slice type in this example.
-    /// let array = marker.allocate([9, 8, 7]).unwrap();
-    /// let array_slice: Allocation<[i32]> = array
-    ///     .into_slice_like_allocation();
-    /// assert_eq!(*array_slice, [9, 8, 7]);
+    /// let slice_ptr = IntoMutSliceLikePtr::into_mut_slice_like_ptr(
+    ///     value_ptr,
+    /// );
+    /// assert_eq!(unsafe { &*slice_ptr }, [3.14159]);
     /// ```
-    ///
-    /// [`SliceLike`]: trait.SliceLike.html
+    fn into_mut_slice_like_ptr(ptr: *mut Self) -> *mut T;
+}
+
+unsafe impl<T> IntoMutSliceLikePtr<[T]> for T {
     #[inline]
-    fn into_slice_like_allocation(mut self) -> Allocation<'marker, T> {
-        unsafe {
-            let slice_ptr =
-                (*self.as_mut_slice_like_ptr()).as_element_slice_mut();
-            let ptr = (*slice_ptr).as_mut_ptr();
-            let len = (*slice_ptr).len();
-            forget(self);
-
-            Allocation {
-                data: NonNull::new(<T as SliceLike>::from_element_slice_mut(
-                    slice::from_raw_parts_mut(ptr, len),
-                )).unwrap(),
-                _phantom: PhantomData,
-            }
-        }
-    }
-
-    /// Converts this allocation into an allocation of elements that make up
-    /// a compatible [`SliceLike`] type without altering the allocation data.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use scratchpad::{IntoSliceLikeAllocation, Scratchpad};
-    ///
-    /// let scratchpad = Scratchpad::<[u8; 32], [usize; 1]>::static_new();
-    /// let marker = scratchpad.mark_front().unwrap();
-    ///
-    /// let message = marker.allocate_slice_copy("foo").unwrap();
-    /// assert_eq!(&*message, "foo");
-    ///
-    /// // Calling `into_element_slice_allocation()` on a `&str` allocation
-    /// // yields a `&[u8]` allocation.
-    /// let bytes = message.into_element_slice_allocation();
-    /// assert_eq!(*bytes, [b'f', b'o', b'o']);
-    /// ```
-    ///
-    /// [`SliceLike`]: trait.SliceLike.html
-    fn into_element_slice_allocation(
-        mut self,
-    ) -> Allocation<'marker, [<T as SliceLike>::Element]> {
-        unsafe {
-            let slice_ptr =
-                (*self.as_mut_slice_like_ptr()).as_element_slice_mut();
-            let ptr = (*slice_ptr).as_mut_ptr();
-            let len = (*slice_ptr).len();
-            forget(self);
-
-            Allocation {
-                data: NonNull::new(slice::from_raw_parts_mut(ptr, len))
-                    .unwrap(),
-                _phantom: PhantomData,
-            }
-        }
-    }
-
-    /// Returns a reference to this allocation's data as a [`SliceLike`] type
-    /// without altering the allocation.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use scratchpad::{Allocation, IntoSliceLikeAllocation, Scratchpad};
-    ///
-    /// let scratchpad = Scratchpad::<[i32; 6], [usize; 1]>::static_new();
-    /// let marker = scratchpad.mark_front().unwrap();
-    ///
-    /// let scalar = marker.allocate(3).unwrap();
-    /// assert_eq!(*scalar.as_slice_like(), [3]);
-    /// assert_eq!(*scalar, 3);
-    ///
-    /// let slice = marker.allocate_array_with(2, |index| index as i32)
-    ///     .unwrap();
-    /// assert_eq!(*slice.as_slice_like(), [0, 1]);
-    /// assert_eq!(*slice, [0, 1]);
-    ///
-    /// // Automatic conversion of an array into a slice is ambiguous, as the
-    /// // compiler can't tell whether we want a slice with the same length as
-    /// // the array or a slice with only one element containing the entire
-    /// // array. We must explicitly specify the slice type in this example.
-    /// let array = marker.allocate([9, 8, 7]).unwrap();
-    /// let array_slice: &[i32] = array.as_slice_like();
-    /// assert_eq!(*array_slice, [9, 8, 7]);
-    /// assert_eq!(*array, [9, 8, 7]);
-    /// ```
-    ///
-    /// [`SliceLike`]: trait.SliceLike.html
-    fn as_slice_like(&self) -> &T;
-
-    /// Returns a mutable reference to this allocation's data as a
-    /// [`SliceLike`] type without altering the allocation.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use scratchpad::{Allocation, IntoSliceLikeAllocation, Scratchpad};
-    ///
-    /// let scratchpad = Scratchpad::<[i32; 3], [usize; 1]>::static_new();
-    /// let marker = scratchpad.mark_front().unwrap();
-    ///
-    /// let mut array = marker.allocate([9, 8, 7]).unwrap();
-    ///
-    /// // Restrict scope of the mutable borrow performed by
-    /// // `as_mut_slice_like()`.
-    /// {
-    ///     let array_slice: &mut [i32] = array.as_mut_slice_like();
-    ///     array_slice[1] = 4;
-    /// }
-    ///
-    /// assert_eq!(*array, [9, 4, 7]);
-    /// ```
-    ///
-    /// [`SliceLike`]: trait.SliceLike.html
-    fn as_mut_slice_like(&mut self) -> &mut T;
-
-    /// Returns a pointer to this allocation's data as a [`SliceLike`] type
-    /// without altering the allocation.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use scratchpad::{Allocation, IntoSliceLikeAllocation, Scratchpad};
-    ///
-    /// let scratchpad = Scratchpad::<[i32; 3], [usize; 1]>::static_new();
-    /// let marker = scratchpad.mark_front().unwrap();
-    ///
-    /// let array = marker.allocate([9, 8, 7]).unwrap();
-    /// let array_slice: *const [i32] = array.as_slice_like_ptr();
-    /// assert_eq!(*unsafe { &*array_slice }, [9, 8, 7]);
-    /// ```
-    ///
-    /// [`SliceLike`]: trait.SliceLike.html
-    #[inline]
-    fn as_slice_like_ptr(&self) -> *const T {
-        self.as_slice_like()
-    }
-
-    /// Returns a mutable pointer to this allocation's data as a [`SliceLike`]
-    /// type without altering the allocation.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use scratchpad::{Allocation, IntoSliceLikeAllocation, Scratchpad};
-    ///
-    /// let scratchpad = Scratchpad::<[i32; 3], [usize; 1]>::static_new();
-    /// let marker = scratchpad.mark_front().unwrap();
-    ///
-    /// let mut array = marker.allocate([9, 8, 7]).unwrap();
-    ///
-    /// // Restrict scope of the mutable borrow performed by
-    /// // `as_mut_slice_like_ptr()`.
-    /// {
-    ///     let array_slice: *mut [i32] = array.as_mut_slice_like_ptr();
-    ///     unsafe {
-    ///         (*array_slice)[1] = 4;
-    ///     }
-    /// }
-    ///
-    /// assert_eq!(*array, [9, 4, 7]);
-    /// ```
-    ///
-    /// [`SliceLike`]: trait.SliceLike.html
-    #[inline]
-    fn as_mut_slice_like_ptr(&mut self) -> *mut T {
-        self.as_mut_slice_like()
+    fn into_mut_slice_like_ptr(ptr: *mut T) -> *mut [T] {
+        unsafe { slice::from_raw_parts_mut(ptr, 1) }
     }
 }
 
-unsafe impl<'marker, T> IntoSliceLikeAllocation<'marker, T>
-    for Allocation<'marker, T>
+unsafe impl<T> IntoMutSliceLikePtr<T> for T
 where
     T: SliceLike + ?Sized,
 {
     #[inline]
-    fn as_slice_like(&self) -> &T {
-        unsafe { self.data.as_ref() }
-    }
-
-    #[inline]
-    fn as_mut_slice_like(&mut self) -> &mut T {
-        unsafe { self.data.as_mut() }
-    }
-}
-
-unsafe impl<'marker, T> IntoSliceLikeAllocation<'marker, [T]>
-    for Allocation<'marker, T>
-where
-    T: Sized,
-{
-    #[inline]
-    fn as_slice_like(&self) -> &[T] {
-        unsafe { slice::from_raw_parts(self.data.as_ptr(), 1) }
-    }
-
-    #[inline]
-    fn as_mut_slice_like(&mut self) -> &mut [T] {
-        unsafe { slice::from_raw_parts_mut(self.data.as_ptr(), 1) }
+    fn into_mut_slice_like_ptr(ptr: *mut T) -> *mut T {
+        ptr
     }
 }
 
@@ -1347,19 +1138,10 @@ macro_rules! generate_array_trait_impls {
             }
         }
 
-        unsafe impl<'marker, T> IntoSliceLikeAllocation<'marker, [T]>
-            for Allocation<'marker, [T; $size]>
-        where
-            T: Sized,
-        {
+        unsafe impl<T> IntoMutSliceLikePtr<[T]> for [T; $size] {
             #[inline]
-            fn as_slice_like(&self) -> &[T] {
-                unsafe { &self.data.as_ref()[..] }
-            }
-
-            #[inline]
-            fn as_mut_slice_like(&mut self) -> &mut [T] {
-                unsafe { &mut self.data.as_mut()[..] }
+            fn into_mut_slice_like_ptr(ptr: *mut [T; $size]) -> *mut [T] {
+                unsafe { &mut (*ptr)[..] }
             }
         }
     };

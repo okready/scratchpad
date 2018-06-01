@@ -63,8 +63,9 @@
 //!   into an allocation using [`Marker::allocate_slice()`],
 //!   [`Marker::allocate_slice_clone()`], or
 //!   [`Marker::allocate_slice_copy()`], and existing allocations can be
-//!   converted into slice allocations using the [`IntoSliceLikeAllocation`]
-//!   trait. Allocations of [`str`] slices are supported as well.
+//!   converted into slice allocations using
+//!   [`Allocation::into_slice_like_allocation()`]. Allocations of [`str`]
+//!   slices are supported as well.
 //! - **Extending and concatenating allocations.** Under certain conditions,
 //!   allocations can be added to or combined:
 //!   - If two existing allocations from a given scratchpad are adjacent in
@@ -428,6 +429,7 @@
 //! [`Allocation`]: struct.Allocation.html
 //! [`Allocation::concat()`]: struct.Allocation.html#method.concat
 //! [`Allocation::concat_unchecked()`]: struct.Allocation.html#method.concat_unchecked
+//! [`Allocation::into_slice_like_allocation()`]: struct.Allocation.html#method.into_slice_like_allocation
 //! [`append_clone()`]: struct.MarkerFront.html#method.append_clone
 //! [`append_copy()`]: struct.MarkerFront.html#method.append_copy
 //! [`array_len_for_bytes!()`]: macro.array_len_for_bytes.html
@@ -443,7 +445,6 @@
 //! [`CACHE_ALIGNMENT`]: constant.CACHE_ALIGNMENT.html
 //! [`CacheAligned`]: struct.CacheAligned.html
 //! [`Drop`]: https://doc.rust-lang.org/core/ops/trait.Drop.html
-//! [`IntoSliceLikeAllocation`]: trait.IntoSliceLikeAllocation.html
 //! [`mark_back()`]: struct.Scratchpad.html#method.mark_back
 //! [`mark_front()`]: struct.Scratchpad.html#method.mark_front
 //! [`Marker`]: trait.Marker.html

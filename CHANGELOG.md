@@ -5,6 +5,20 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- `IntoMutSliceLikePtr` trait for reinterpreting pointer types to compatible
+  `SliceLike` pointers. This replaces the `IntoSliceLikeAllocation` trait for
+  determining which `Allocation` types can be converted to slices and
+  slice-like types.
+
+### Changed
+- Moved `into_slice_like_allocation()` away from the `IntoSliceLikeAllocation`
+  trait into a method of `Allocation` itself, allowing it to be called
+  directly on any allocation without having to import any special traits.
+
+### Removed
+- `IntoSliceLikeAllocation` trait (superseded by
+  `Allocation::into_slice_like_allocation()` and `IntoMutSliceLikePtr` trait).
 
 ## [1.0.0-beta.2] - 2018-05-31
 ### Added
