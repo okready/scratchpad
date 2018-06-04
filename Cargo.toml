@@ -3,7 +3,7 @@ name = "scratchpad"
 version = "1.0.0-beta.3"
 authors = ["Theodore Cipicchio <okready@users.noreply.github.com>"]
 license = "MIT/Apache-2.0"
-description = "Stack-like dynamic memory pool with double-ended allocation support"
+description = "Stack-like memory allocator with double-ended allocation support"
 documentation = "https://docs.rs/scratchpad"
 homepage = "https://github.com/okready/scratchpad"
 repository = "https://github.com/okready/scratchpad"
@@ -17,8 +17,7 @@ travis-ci = { repository = "okready/scratchpad" }
 [features]
 default = ["std"]
 
-# Allow `std` library usage. Currently only used to implement `Buffer` for
-# boxed slices (`std::boxed::Box`) in Rust stable.
+# Allow `std` library usage (`Box` and `Vec` support).
 std = []
 
 # Allow unstable features (requires a nightly toolchain).

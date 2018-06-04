@@ -1,7 +1,7 @@
 scratchpad
 ==========
 
-A Rust library providing a stack-like dynamic memory pool with double-ended
+A Rust library providing a stack-like memory allocator with double-ended
 allocation support.
 
 [![Build Status](https://travis-ci.org/okready/scratchpad.svg?branch=master)](https://travis-ci.org/okready/scratchpad)
@@ -9,11 +9,26 @@ allocation support.
 - [Documentation](https://docs.rs/scratchpad)
 - [Release notes](https://github.com/okready/scratchpad/releases)
 
+`Scratchpad` provides a method for quick and safe dynamic allocations of
+arbitrary types without relying on the global heap (e.g. using `Box` or
+`Vec`). Allocations are made from a fixed-size region of memory in a
+stack-like fashion using two separate stacks (one for each end of the
+allocation buffer) to allow different types of allocations with independent
+lifecycles to be made from each end.
+
+Such allocators are commonly used in game development, but are also useful in
+general for short-lived allocations or groups of allocations that share a
+common lifetime. While not quite as flexible as heap allocations, allocations
+from a stack allocator are usually much faster and are isolated from the rest
+of the heap, reducing memory fragmentation.
+
 Features include:
 
 - User-defined backing storage of data (static arrays, boxed slices, or
   mutable slice references).
 - Allocation of any data type from any scratchpad instance.
+- Ability to combine allocations that are adjacent in memory or add to the
+  most recently created allocation.
 - Double-ended allocation support (allocations from the "front" are separate
   from the "back", but share the same memory pool).
 - Use of lifetimes to prevent dangling references to allocated data.
@@ -61,11 +76,13 @@ toolchain by enabling the `unstable` crate feature.
 The `unstable` crate feature provides some additional functionality when using
 a nightly toolchain:
 
-- `ByteData` trait implementations for `u128`/`i128`.
+- Support for `Box` and `Vec` types as mentioned with the `std` feature,
+  regardless of whether the `std` feature is enabled (if `std` is disabled,
+  this will use the `alloc` library directly).
 - Declaration of the function `Scratchpad::new()` as `const`.
-- Support for using `Box` as the storage type for allocations and marker
-  tracking, regardless of whether the `std` feature is enabled (`alloc`
-  library is used if `std` is disabled).
+- `ByteData` trait implementations for `u128`/`i128` for Rust versions prior
+  to 1.26 (`u128`/`i128` support is enabled by default with both stable and
+  unstable toolchains if the detected Rust version is 1.26 or greater).
 
 Simply add the `unstable` feature to your `Cargo.toml` dependency:
 
