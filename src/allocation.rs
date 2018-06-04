@@ -31,8 +31,8 @@ use core::ptr::NonNull;
 /// when the [`Marker`] is dropped.
 ///
 /// [`Marker`]: trait.Marker.html
-/// [`Deref`]: https://doc.rust-lang.org/core/ops/trait.Deref.html
-/// [`DerefMut`]: https://doc.rust-lang.org/core/ops/trait.DerefMut.html
+/// [`Deref`]: https://doc.rust-lang.org/std/ops/trait.Deref.html
+/// [`DerefMut`]: https://doc.rust-lang.org/std/ops/trait.DerefMut.html
 pub struct Allocation<'marker, T>
 where
     T: ?Sized,
@@ -73,7 +73,7 @@ where
     /// assert_eq!(x, 3.14159);
     /// ```
     ///
-    /// [`Sized`]: https://doc.rust-lang.org/core/marker/trait.Sized.html
+    /// [`Sized`]: https://doc.rust-lang.org/std/marker/trait.Sized.html
     pub fn unwrap(self) -> T {
         unsafe {
             let value = ptr::read(self.data.as_ptr());

@@ -46,7 +46,7 @@ use core::mem::ManuallyDrop;
 ///
 /// [`Buffer`]: trait.Buffer.html
 /// [`CacheAligned`]: struct.CacheAligned.html
-/// [`Drop`]: https://doc.rust-lang.org/core/ops/trait.Drop.html
+/// [`Drop`]: https://doc.rust-lang.org/std/ops/trait.Drop.html
 pub unsafe trait ByteData: Sized {}
 
 unsafe impl ByteData for u8 {}
