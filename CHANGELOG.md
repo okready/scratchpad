@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Moved `into_slice_like_allocation()` away from the `IntoSliceLikeAllocation`
   trait into a method of `Allocation` itself, allowing it to be called
   directly on any allocation without having to import any special traits.
+- Rewrote much of the crate-level documentation to be more useful as well as
+  better reflect the changes made since the initial release.
 
 ### Removed
 - `IntoSliceLikeAllocation` trait (superseded by
