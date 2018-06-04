@@ -432,6 +432,7 @@ impl SliceLike for str {
 ///
 /// [`Allocation::concat()`]: struct.Allocation.html#method.concat
 /// [`MarkerFront::append()`]: struct.MarkerFront.html#method.append
+/// [`SliceLike`]: trait.SliceLike.html
 pub trait ConcatenateSlice: SliceLike {}
 
 impl<T> ConcatenateSlice for [T] {}
