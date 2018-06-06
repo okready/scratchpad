@@ -235,28 +235,30 @@ where
         self.as_bytes().len() / size_of::<usize>()
     }
 
+    #[allow(unknown_lints, cast_ptr_alignment)]
     #[inline]
     fn set(&mut self, index: usize, value: usize) {
         let bytes = self.as_bytes_mut();
-        let contents = unsafe {
-            slice::from_raw_parts_mut(
+        unsafe {
+            let contents = slice::from_raw_parts_mut(
                 bytes.as_mut_ptr() as *mut usize,
                 bytes.len() / size_of::<usize>(),
-            )
-        };
-        contents[index] = value;
+            );
+            ptr::write_unaligned(&mut contents[index], value);
+        }
     }
 
+    #[allow(unknown_lints, cast_ptr_alignment)]
     #[inline]
     fn get(&self, index: usize) -> usize {
         let bytes = self.as_bytes();
-        let contents = unsafe {
-            slice::from_raw_parts(
+        unsafe {
+            let contents = slice::from_raw_parts(
                 bytes.as_ptr() as *const usize,
                 bytes.len() / size_of::<usize>(),
-            )
-        };
-        contents[index]
+            );
+            ptr::read_unaligned(&contents[index])
+        }
     }
 }
 
@@ -477,6 +479,9 @@ where
 }
 
 unsafe impl<T> IntoMutSliceLikePtr<[T]> for T {
+    // `ptr` doesn't get dereferenced by `slice::from_raw_parts_mut()`, so the
+    // lint error can be ignored.
+    #[allow(unknown_lints, not_unsafe_ptr_arg_deref)]
     #[inline]
     fn into_mut_slice_like_ptr(ptr: *mut T) -> *mut [T] {
         unsafe { slice::from_raw_parts_mut(ptr, 1) }
@@ -494,6 +499,10 @@ where
 }
 
 unsafe impl IntoMutSliceLikePtr<[u8]> for str {
+    // Despite the notation, `ptr` doesn't actually get dereferenced by this
+    // function (only the pointer value itself is ever read), so the lint
+    // error can be ignored.
+    #[allow(unknown_lints, not_unsafe_ptr_arg_deref)]
     #[inline]
     fn into_mut_slice_like_ptr(ptr: *mut str) -> *mut [u8] {
         unsafe { (*ptr).as_bytes_mut() }
@@ -1147,6 +1156,10 @@ macro_rules! generate_array_trait_impls {
         }
 
         unsafe impl<T> IntoMutSliceLikePtr<[T]> for [T; $size] {
+            // Despite the notation, `ptr` doesn't actually get dereferenced
+            // by this function (only the pointer value itself is ever read),
+            // so the lint error can be ignored.
+            #[allow(unknown_lints, not_unsafe_ptr_arg_deref)]
             #[inline]
             fn into_mut_slice_like_ptr(ptr: *mut [T; $size]) -> *mut [T] {
                 unsafe { &mut (*ptr)[..] }
@@ -1174,7 +1187,7 @@ generate_array_trait_impls!(
     0x4000, 0x8000, 0x10000, 0x20000, 0x40000, 0x80000
 );
 generate_array_trait_impls!(
-    0x100000, 0x200000, 0x400000, 0x800000, 0x1000000
+    0x10_0000, 0x20_0000, 0x40_0000, 0x80_0000, 0x100_0000
 );
-generate_array_trait_impls!(0x2000000, 0x4000000, 0x8000000, 0x10000000);
-generate_array_trait_impls!(0x20000000, 0x40000000);
+generate_array_trait_impls!(0x200_0000, 0x400_0000, 0x800_0000, 0x1000_0000);
+generate_array_trait_impls!(0x2000_0000, 0x4000_0000);

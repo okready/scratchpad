@@ -211,6 +211,7 @@ where
     /// ```
     ///
     /// [`MarkerBack`]: struct.MarkerBack.html
+    #[allow(unknown_lints, type_complexity)] // Result type lint warning.
     pub fn concat<U, V>(
         self,
         other: Allocation<'marker, V>,
