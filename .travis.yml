@@ -20,10 +20,21 @@ matrix:
     - rustup component add rustfmt-preview
     script:
     - cargo fmt -- --check
+  # `clippy` lint tests.
+  - rust: nightly
+    env: CLIPPY=1
+    before_script:
+    - cargo install clippy
+    script:
+    - cargo clippy
   - rust: nightly
     env: FEATURE_ARGS="--features unstable"
   - rust: nightly
     env: FEATURE_ARGS="--features unstable --lib --no-default-features"
+  # `clippy` may fail to build with certain nightly toolchain releases, so
+  # ignore lint tests if this happens.
+  allow_failures:
+  - env: CLIPPY=1
 
 script:
 - cargo test $FEATURE_ARGS --verbose
