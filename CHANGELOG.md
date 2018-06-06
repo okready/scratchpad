@@ -5,6 +5,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+- Use unaligned reads and writes in `Tracking::get()` and `Tracking::set()`
+  implementations for `Buffer` types to avoid potential issues with marker
+  tracking buffers that are not aligned to at least the same alignment as
+  `usize`, as `Buffer` doesn't guarantee any specific alignment, and some CPU
+  architectures do not allow unaligned access. This can impact performance,
+  but retains compatibility with code that may be using tracking buffers with
+  lower alignment requirements.
 
 ## [1.0.0] - 2018-06-04
 ### Added
