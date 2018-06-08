@@ -41,7 +41,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-scratchpad = "1.0"
+scratchpad = "1.1"
 ```
 
 and this to your crate root:
@@ -65,7 +65,7 @@ must be disabled in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-scratchpad = { version = "1.0", default-features = false }
+scratchpad = { version = "1.1", default-features = false }
 ```
 
 `Box` and `Vec` support is still available for `no_std` builds when using a
@@ -88,5 +88,5 @@ Simply add the `unstable` feature to your `Cargo.toml` dependency:
 
 ```toml
 [dependencies]
-scratchpad = { version = "1.0", features = ["unstable"] }
+scratchpad = { version = "1.1", features = ["unstable"] }
 ```

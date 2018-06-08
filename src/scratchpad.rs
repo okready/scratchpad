@@ -9,12 +9,14 @@
 //! `Scratchpad` type implementation.
 
 use core::fmt;
+use core::ptr;
 
 use super::{
     Buffer, Error, ErrorKind, MarkerBack, MarkerFront, StaticBuffer, Tracking,
 };
-use core::cell::{RefCell, UnsafeCell};
+use core::cell::{Cell, UnsafeCell};
 use core::mem::{size_of, uninitialized};
+use core::ops::{Deref, DerefMut};
 
 /// Front and back stacks for `Marker` tracking (used internally).
 pub(crate) struct MarkerStacks<TrackingT>
@@ -36,6 +38,175 @@ where
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "MarkerStacks {{ ... }}")
+    }
+}
+
+/// `BorrowFlag` replacement for internal `RefCell` type.
+type BorrowFlag = usize;
+const UNUSED: BorrowFlag = 0usize;
+const WRITING: BorrowFlag = !0usize;
+
+/// `Ref` replacement for internal `RefCell` type.
+///
+/// This only implements the parts of `core::cell::Ref` used by this crate and
+/// is not intended as a full replacement.
+pub(crate) struct Ref<'a, T>
+where
+    T: 'a,
+{
+    cell: &'a RefCell<T>,
+}
+
+impl<'a, T> Drop for Ref<'a, T> {
+    #[inline]
+    fn drop(&mut self) {
+        let borrow = self.cell.borrow.get();
+        debug_assert_ne!(borrow, UNUSED);
+        debug_assert_ne!(borrow, WRITING);
+        self.cell.borrow.set(borrow - 1);
+    }
+}
+
+impl<'a, T> Deref for Ref<'a, T> {
+    type Target = T;
+
+    #[inline]
+    fn deref(&self) -> &T {
+        unsafe { &*self.cell.value.get() }
+    }
+}
+
+impl<'a, T> fmt::Debug for Ref<'a, T>
+where
+    T: fmt::Debug,
+{
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(&**self, f)
+    }
+}
+
+/// `RefMut` replacement for internal `RefCell` type.
+///
+/// This only implements the parts of `core::cell::RefMut` used by this crate
+/// and is not intended as a full replacement.
+pub(crate) struct RefMut<'a, T>
+where
+    T: 'a,
+{
+    cell: &'a RefCell<T>,
+}
+
+impl<'a, T> Drop for RefMut<'a, T> {
+    #[inline]
+    fn drop(&mut self) {
+        debug_assert_eq!(self.cell.borrow.get(), WRITING);
+        self.cell.borrow.set(UNUSED);
+    }
+}
+
+impl<'a, T> Deref for RefMut<'a, T> {
+    type Target = T;
+
+    #[inline]
+    fn deref(&self) -> &T {
+        unsafe { &*self.cell.value.get() }
+    }
+}
+
+impl<'a, T> DerefMut for RefMut<'a, T> {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut T {
+        unsafe { &mut *self.cell.value.get() }
+    }
+}
+
+impl<'a, T> fmt::Debug for RefMut<'a, T>
+where
+    T: fmt::Debug,
+{
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(&**self, f)
+    }
+}
+
+/// `RefCell` replacement for internal use.
+///
+/// In order to support initialization of a `RefCell<MarkerStacks<_>>` using
+/// `Scratchpad::placement_static_new()`, we would need to be able to rely on
+/// the internals of `RefCell` to have a specific layout. It is likely
+/// dangerous to assume that its internals won't change over time, so we'll
+/// instead use a custom type whose layout we can depend on over future
+/// versions.
+pub(crate) struct RefCell<T> {
+    borrow: Cell<BorrowFlag>,
+    value: UnsafeCell<T>,
+}
+
+impl<T> RefCell<T> {
+    #[inline]
+    #[cfg(feature = "unstable")]
+    pub(crate) const fn new(value: T) -> Self {
+        RefCell {
+            borrow: Cell::new(UNUSED),
+            value: UnsafeCell::new(value),
+        }
+    }
+
+    #[inline]
+    #[cfg(not(feature = "unstable"))]
+    pub(crate) fn new(value: T) -> Self {
+        RefCell {
+            borrow: Cell::new(UNUSED),
+            value: UnsafeCell::new(value),
+        }
+    }
+
+    /// Initializes a `RefCell` in uninitialized memory, leaving its value
+    /// uninitialized.
+    #[inline]
+    pub(crate) unsafe fn placement_new_uninitialized(dst: *mut Self) {
+        // `UnsafeCell<T>` simply wraps a `T` value, so we don't need to do
+        // any special initialization for the `value` field.
+        ptr::write(&mut (*dst).borrow, Cell::new(UNUSED));
+    }
+
+    #[inline]
+    pub(crate) fn borrow(&self) -> Ref<T> {
+        let borrow = self.borrow.get();
+        assert_ne!(borrow, WRITING);
+        self.borrow.set(borrow + 1);
+        Ref { cell: self }
+    }
+
+    #[inline]
+    pub(crate) fn borrow_mut(&self) -> RefMut<T> {
+        assert_eq!(self.borrow.get(), UNUSED);
+        self.borrow.set(WRITING);
+        RefMut { cell: self }
+    }
+
+    #[inline]
+    pub(crate) fn get_mut(&mut self) -> &mut T {
+        unsafe { &mut *self.value.get() }
+    }
+}
+
+impl<T> fmt::Debug for RefCell<T>
+where
+    T: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // The `Debug` implementation for `core::cell::RefCell` won't show the
+        // cell's value if it is mutably borrowed, but that seems unnecessary
+        // since we won't be holding on to the immutably borrowed value
+        // outside the scope of this function (and since `RefCell` isn't
+        // `Sync`, we can expect it to not be modified while in this
+        // function).
+        f.debug_struct("RefCell")
+            .field("value", unsafe { &*self.value.get() })
+            .finish()
     }
 }
 
@@ -209,6 +380,61 @@ where
                 back: size_of::<TrackingT>() / size_of::<usize>(),
             }),
         }
+    }
+
+    /// Initializes a new instance in uninitialized memory for scratchpad
+    /// types backed entirely by static arrays.
+    ///
+    /// This is provided to allow for creation of scratchpads backed by large
+    /// static arrays without storing any parameters or return values on the
+    /// stack.
+    ///
+    /// Since static array [`Buffer`] and [`Tracking`] types are owned by the
+    /// scratchpad, and their sizes are known ahead of time to the scratchpad
+    /// type, scratchpads using only static arrays for storage can be created
+    /// without having to provide any parameters.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use]
+    /// # extern crate scratchpad;
+    /// use scratchpad::{CacheAligned, Scratchpad};
+    ///
+    /// // Scratchpad that can hold up to 1 MB of data and up to 16 allocation
+    /// // markers.
+    /// type LargeScratchpad = Scratchpad<
+    ///     array_type_for_bytes!(CacheAligned, 1024 * 1024),
+    ///     array_type_for_markers!(usize, 16),
+    /// >;
+    ///
+    /// # fn main() {
+    /// unsafe {
+    ///     // The `Vec` here represents some heap-allocated memory in which a
+    ///     // `Scratchpad` needs to be initialized at runtime.
+    ///     let mut memory = Vec::with_capacity(1);
+    ///     memory.set_len(1);
+    ///
+    ///     LargeScratchpad::placement_static_new(&mut memory[0]);
+    ///
+    ///     let scratchpad = &memory[0];
+    ///     let marker = scratchpad.mark_front().unwrap();
+    ///     let allocation = marker.allocate(12).unwrap();
+    ///     assert_eq!(*allocation, 12);
+    /// }
+    /// # }
+    /// ```
+    ///
+    /// [`Buffer`]: trait.Buffer.html
+    /// [`Tracking`]: trait.Tracking.html
+    #[inline]
+    pub unsafe fn placement_static_new(dst: *mut Self) {
+        // `UnsafeCell<T>` simply wraps a `T` value, so we don't need to do
+        // any special initialization for the `buffer` field.
+        RefCell::placement_new_uninitialized(&mut (*dst).markers);
+        let markers = (*dst).markers.get_mut();
+        ptr::write(&mut markers.front, 0);
+        ptr::write(&mut markers.back, markers.data.capacity());
     }
 }
 
