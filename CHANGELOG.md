@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 ### Added
-- `Scratchpad::placement_static_new()` for initializing a `Scratchpad` within
+- `Scratchpad::static_new_in_place()` for initializing a `Scratchpad` within
   a block of uninitialized memory for `Scratchpad` types that use only static
   arrays for backing memory, bypassing potential call stack use for parameters
   and return values that may exceed the amount of space available on the

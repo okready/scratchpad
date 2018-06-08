@@ -134,7 +134,7 @@ where
 /// `RefCell` replacement for internal use.
 ///
 /// In order to support initialization of a `RefCell<MarkerStacks<_>>` using
-/// `Scratchpad::placement_static_new()`, we would need to be able to rely on
+/// `Scratchpad::static_new_in_place()`, we would need to be able to rely on
 /// the internals of `RefCell` to have a specific layout. It is likely
 /// dangerous to assume that its internals won't change over time, so we'll
 /// instead use a custom type whose layout we can depend on over future
@@ -166,7 +166,7 @@ impl<T> RefCell<T> {
     /// Initializes a `RefCell` in uninitialized memory, leaving its value
     /// uninitialized.
     #[inline]
-    pub(crate) unsafe fn placement_new_uninitialized(dst: *mut Self) {
+    pub(crate) unsafe fn new_uninitialized_value_in_place(dst: *mut Self) {
         // `UnsafeCell<T>` simply wraps a `T` value, so we don't need to do
         // any special initialization for the `value` field.
         ptr::write(&mut (*dst).borrow, Cell::new(UNUSED));
@@ -415,7 +415,7 @@ where
     ///     let mut memory = Vec::with_capacity(1);
     ///     memory.set_len(1);
     ///
-    ///     LargeScratchpad::placement_static_new(&mut memory[0]);
+    ///     LargeScratchpad::static_new_in_place(&mut memory[0]);
     ///
     ///     let scratchpad = &memory[0];
     ///     let marker = scratchpad.mark_front().unwrap();
@@ -428,10 +428,10 @@ where
     /// [`Buffer`]: trait.Buffer.html
     /// [`Tracking`]: trait.Tracking.html
     #[inline]
-    pub unsafe fn placement_static_new(dst: *mut Self) {
+    pub unsafe fn static_new_in_place(dst: *mut Self) {
         // `UnsafeCell<T>` simply wraps a `T` value, so we don't need to do
         // any special initialization for the `buffer` field.
-        RefCell::placement_new_uninitialized(&mut (*dst).markers);
+        RefCell::new_uninitialized_value_in_place(&mut (*dst).markers);
         let markers = (*dst).markers.get_mut();
         ptr::write(&mut markers.front, 0);
         ptr::write(&mut markers.back, markers.data.capacity());
