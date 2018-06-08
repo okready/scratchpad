@@ -1,6 +1,6 @@
 [package]
 name = "scratchpad"
-version = "1.0.1-pre.0"
+version = "1.0.1"
 authors = ["Theodore Cipicchio <okready@users.noreply.github.com>"]
 license = "MIT/Apache-2.0"
 description = "Stack-like memory allocator with double-ended allocation support"
