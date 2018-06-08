@@ -59,17 +59,17 @@ The minimum supported Rust version is 1.25 due to use of `NonNull<T>` and the
 ## `no_std` Support
 
 `scratchpad` doesn't require the Rust standard library, although it makes use
-of it by default (via the `std` crate feature) to provide support for using
-`Box` as backing memory. For `no_std` support, the `std` feature must be
-disabled in your `Cargo.toml`:
+of it by default (via the `std` crate feature) to provide support for use of
+`Box` and `Vec` in various places. For `no_std` support, the `std` feature
+must be disabled in your `Cargo.toml`:
 
 ```toml
 [dependencies]
 scratchpad = { version = "1.0", default-features = false }
 ```
 
-`Box` support is still available for `no_std` builds when using a nightly
-toolchain by enabling the `unstable` crate feature.
+`Box` and `Vec` support is still available for `no_std` builds when using a
+nightly toolchain by enabling the `unstable` crate feature.
 
 ## Unstable Features
 
