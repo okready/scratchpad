@@ -163,7 +163,7 @@ impl<T> RefCell<T> {
         }
     }
 
-    /// Initializes a `RefCell` in uninitialized memory, leaving its value
+    /// Creates a `RefCell` in uninitialized memory, leaving its value
     /// uninitialized.
     #[inline]
     pub(crate) unsafe fn new_uninitialized_value_in_place(dst: *mut Self) {
@@ -386,13 +386,29 @@ where
     /// types backed entirely by static arrays.
     ///
     /// This is provided to allow for creation of scratchpads backed by large
-    /// static arrays without storing any parameters or return values on the
-    /// stack.
+    /// static arrays without storing any large parameters or return values on
+    /// the stack.
     ///
     /// Since static array [`Buffer`] and [`Tracking`] types are owned by the
     /// scratchpad, and their sizes are known ahead of time to the scratchpad
     /// type, scratchpads using only static arrays for storage can be created
     /// without having to provide any parameters.
+    ///
+    /// # Safety
+    ///
+    /// This function is unsafe because it operates on a raw pointer.
+    ///
+    /// It does not drop any existing contents of `dst` before writing, nor
+    /// does it check for whether `dst` is a valid pointer.
+    ///
+    /// `dst` must be properly aligned for storage of an instance of
+    /// `Scratchpad`.
+    ///
+    /// After returning, the contents of `dst` should be dropped when no
+    /// longer in use before the memory pointed to by `dst` is freed. If `dst`
+    /// points to memory that belongs to an actual `Scratchpad` instance, the
+    /// drop implementation will likely be called automatically when the
+    /// variable is destroyed.
     ///
     /// # Examples
     ///
@@ -410,7 +426,7 @@ where
     ///
     /// # fn main() {
     /// unsafe {
-    ///     // The `Vec` here represents some heap-allocated memory in which a
+    ///     // The `Vec` here represents any region of memory in which a
     ///     // `Scratchpad` needs to be initialized at runtime.
     ///     let mut memory = Vec::with_capacity(1);
     ///     memory.set_len(1);
@@ -430,7 +446,8 @@ where
     #[inline]
     pub unsafe fn static_new_in_place(dst: *mut Self) {
         // `UnsafeCell<T>` simply wraps a `T` value, so we don't need to do
-        // any special initialization for the `buffer` field.
+        // any special initialization for the `buffer` or `MarkerStacks::data`
+        // fields.
         RefCell::new_uninitialized_value_in_place(&mut (*dst).markers);
         let markers = (*dst).markers.get_mut();
         ptr::write(&mut markers.front, 0);
