@@ -300,8 +300,7 @@ unsafe impl<T> StaticBuffer for T
 where
     T: Array,
     <T as Array>::Item: ByteData,
-{
-}
+{}
 
 /// Trait for [`Scratchpad`] allocation tracking containers.
 ///
