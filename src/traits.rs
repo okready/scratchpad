@@ -65,6 +65,16 @@ unsafe impl ByteData for i128 {}
 unsafe impl ByteData for isize {}
 unsafe impl ByteData for CacheAligned {}
 
+/// [`ByteData`] subtrait for types that guarantee `isize` and `usize`
+/// alignment.
+///
+/// [`ByteData`]: trait.ByteData.html
+pub unsafe trait SizeAlignedByteData: ByteData {}
+
+unsafe impl SizeAlignedByteData for usize {}
+unsafe impl SizeAlignedByteData for isize {}
+unsafe impl SizeAlignedByteData for CacheAligned {}
+
 /// Trait for static arrays.
 ///
 /// # Safety
@@ -178,6 +188,98 @@ where
     }
 }
 
+/// [`Buffer`] subtrait for that guarantees alignment for `isize` and `usize`
+/// values.
+///
+/// [`Buffer`]: trait.Buffer.html
+pub trait SizeAlignedBuffer: Buffer {
+    /// Returns a `usize` slice of the buffer contents.
+    fn as_usize_slice(&self) -> &[usize];
+    /// Returns a mutable `usize` slice of the buffer contents.
+    fn as_usize_slice_mut(&mut self) -> &mut [usize];
+}
+
+impl<T> SizeAlignedBuffer for T
+where
+    T: Array,
+    T::Item: SizeAlignedByteData,
+{
+    #[inline]
+    fn as_usize_slice(&self) -> &[usize] {
+        let data = self.as_slice();
+        unsafe {
+            slice::from_raw_parts(
+                data.as_ptr() as *const usize,
+                data.len() * size_of::<T::Item>() / size_of::<usize>(),
+            )
+        }
+    }
+
+    #[inline]
+    fn as_usize_slice_mut(&mut self) -> &mut [usize] {
+        let data = self.as_mut_slice();
+        unsafe {
+            slice::from_raw_parts_mut(
+                data.as_mut_ptr() as *mut usize,
+                data.len() * size_of::<T::Item>() / size_of::<usize>(),
+            )
+        }
+    }
+}
+
+impl<'a, T> SizeAlignedBuffer for &'a mut [T]
+where
+    T: SizeAlignedByteData,
+{
+    #[inline]
+    fn as_usize_slice(&self) -> &[usize] {
+        unsafe {
+            slice::from_raw_parts(
+                self.as_ptr() as *const usize,
+                self.len() * size_of::<T>() / size_of::<usize>(),
+            )
+        }
+    }
+
+    #[inline]
+    fn as_usize_slice_mut(&mut self) -> &mut [usize] {
+        unsafe {
+            slice::from_raw_parts_mut(
+                self.as_mut_ptr() as *mut usize,
+                self.len() * size_of::<T>() / size_of::<usize>(),
+            )
+        }
+    }
+}
+
+#[cfg(any(feature = "std", feature = "unstable"))]
+impl<T> SizeAlignedBuffer for Box<[T]>
+where
+    T: SizeAlignedByteData,
+{
+    #[inline]
+    fn as_usize_slice(&self) -> &[usize] {
+        let data = self.as_ref();
+        unsafe {
+            slice::from_raw_parts(
+                data.as_ptr() as *const usize,
+                data.len() * size_of::<T>() / size_of::<usize>(),
+            )
+        }
+    }
+
+    #[inline]
+    fn as_usize_slice_mut(&mut self) -> &mut [usize] {
+        let data = self.as_mut();
+        unsafe {
+            slice::from_raw_parts_mut(
+                data.as_mut_ptr() as *mut usize,
+                data.len() * size_of::<T>() / size_of::<usize>(),
+            )
+        }
+    }
+}
+
 /// [`Buffer`] sub-trait for static arrays.
 ///
 /// This trait is used specifically to restrict the implementation of
@@ -228,37 +330,21 @@ pub trait Tracking: Sized {
 
 impl<T> Tracking for T
 where
-    T: Buffer,
+    T: SizeAlignedBuffer,
 {
     #[inline]
     fn capacity(&self) -> usize {
-        self.as_bytes().len() / size_of::<usize>()
+        self.as_usize_slice().len()
     }
 
-    #[allow(unknown_lints, cast_ptr_alignment)]
     #[inline]
     fn set(&mut self, index: usize, value: usize) {
-        let bytes = self.as_bytes_mut();
-        unsafe {
-            let contents = slice::from_raw_parts_mut(
-                bytes.as_mut_ptr() as *mut usize,
-                bytes.len() / size_of::<usize>(),
-            );
-            ptr::write_unaligned(&mut contents[index], value);
-        }
+        self.as_usize_slice_mut()[index] = value;
     }
 
-    #[allow(unknown_lints, cast_ptr_alignment)]
     #[inline]
     fn get(&self, index: usize) -> usize {
-        let bytes = self.as_bytes();
-        unsafe {
-            let contents = slice::from_raw_parts(
-                bytes.as_ptr() as *const usize,
-                bytes.len() / size_of::<usize>(),
-            );
-            ptr::read_unaligned(&contents[index])
-        }
+        self.as_usize_slice()[index]
     }
 }
 

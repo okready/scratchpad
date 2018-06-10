@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   arrays for backing memory, bypassing potential call stack use for parameters
   and return values that may exceed the amount of space available on the
   stack.
+- `SizeAlignedByteData` trait for `ByteData` types that are guaranteed to
+  provide proper alignment for storage of `usize` and `isize` values.
+- `SizeAlignedBuffer` trait for `Buffer` types that are guaranteed to provide
+  proper alignment for storage of `usize` and `isize` values.
+
+### Changed
+- Only implement `Tracking` for `SizeAlignedBuffer` types (implemented by
+  default for arrays and slices of `usize`, `isize`, and `CacheAligned`
+  elements), and use normal (aligned) reads and writes in the associated
+  `Tracking::get()` and `Tracking::set()` implementations, avoiding the
+  performance penalties associated with supporting unaligned reads and writes.
 
 ## [1.0.1] - 2018-06-07
 ### Fixed

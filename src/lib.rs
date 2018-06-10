@@ -24,7 +24,8 @@
 //!     - [Buffer Types](#buffer-types)
 //!     - [Macros and Functions for Handling Buffers](#macros-and-functions-for-handling-buffers)
 //!   - [Data Alignment](#data-alignment)
-//!     - [`Buffer` and `Tracking` Alignments](#buffer-and-tracking-alignments)
+//!     - [`Buffer` Alignment](#buffer-alignment)
+//!     - [`Tracking` Alignment](#tracking-alignment)
 //!     - [Alignment of Allocated Arrays](#alignment-of-allocated-arrays)
 //!     - [Cache Alignment](#cache-alignment)
 //!   - [Memory Overhead](#memory-overhead)
@@ -304,7 +305,9 @@
 //! allow storage and retrieval of a fixed number of `usize` values. Unlike
 //! [`Buffer`], there is no restriction on how the values are stored so long
 //! as they can be set and subsequently retrieved by index. Any type
-//! implementing [`Buffer`] also implements [`Tracking`] by default.
+//! implementing [`SizeAlignedBuffer`] (which includes arrays and slices of
+//! `usize`, `isize`, and [`CacheAligned`] elements) also implements
+//! [`Tracking`] by default.
 //!
 //! ### Macros and Functions for Handling Buffers
 //!
@@ -346,14 +349,12 @@
 //! by grouping allocations based on their alignment requirements or by using
 //! separate scratchpads for different alignments.
 //!
-//! ### `Buffer` and `Tracking` Alignments
+//! ### `Buffer` Alignment
 //!
-//! The alignment of the allocation buffer and marker tracking themselves are
-//! determined by the element type of the corresponding slice or array used,
-//! as specified by the generic parameters of the [`Scratchpad`] type and the
-//! parameters of [`Scratchpad::new()`]. If the alignment of the buffer itself
-//! doesn't match the alignment needed for the first allocation made, the
-//! allocation will be offset from the start of the buffer as needed,
+//! The alignment of the allocation buffer is determined by the element type
+//! of the corresponding slice or array used. If the alignment of the buffer
+//! itself doesn't match the alignment needed for the first allocation made,
+//! the allocation will be offset from the start of the buffer as needed,
 //! resulting in wasted space.
 //!
 //! To avoid this, use an element type for the buffer's slice or array that
@@ -381,6 +382,23 @@
 //!     unsafe { uninitialized() },
 //! );
 //! ```
+//!
+//! ### `Tracking` Alignment
+//!
+//! [`Marker`] states are tracked using a single `usize` value for each
+//! marker using any type that implements the [`Tracking`] trait. Certain CPU
+//! architectures require data to be properly aligned when reading from or
+//! writing to memory, triggering a hardware interrupt if unaligned access is
+//! attempted.
+//!
+//! Because of this, this crate only implements [`Tracking`] for arrays and
+//! slices of `usize`, `isize`, or [`CacheAligned`] values. While data types
+//! with smaller alignments could be supported using unaligned reads and
+//! writes (i.e. [`ptr::read_unaligned()`] and [`ptr::write_unaligned()`]),
+//! doing so would have a small but potentially undesirable negative impact on
+//! performance without any notable benefit (older versions of this crate in
+//! fact did this as a workaround for originally implementing [`Tracking`] for
+//! all [`Buffer`] types).
 //!
 //! ### Alignment of Allocated Arrays
 //!
@@ -631,11 +649,14 @@
 //! [`MarkerFront::append()`]: struct.MarkerFront.html#method.append
 //! [`MarkerFront::append_clone()`]: struct.MarkerFront.html#method.append_clone
 //! [`MarkerFront::append_copy()`]: struct.MarkerFront.html#method.append_copy
+//! [`ptr::read_unaligned()`]: https://doc.rust-lang.org/std/ptr/fn.read_unaligned.html
+//! [`ptr::write_unaligned()`]: https://doc.rust-lang.org/std/ptr/fn.write_unaligned.html
 //! [`Scratchpad`]: struct.Scratchpad.html
 //! [`Scratchpad::mark_back()`]: struct.Scratchpad.html#method.mark_back
 //! [`Scratchpad::mark_front()`]: struct.Scratchpad.html#method.mark_front
 //! [`Scratchpad::new()`]: struct.Scratchpad.html#method.new
 //! [`Scratchpad::static_new()`]: struct.Scratchpad.html#method.static_new
+//! [`SizeAlignedBuffer`]: trait.SizeAlignedBuffer.html
 //! [`SliceSource`]: trait.SliceSource.html
 //! [`SliceSourceCollection`]: trait.SliceSourceCollection.html
 //! [`SliceMoveSourceCollection`]: trait.SliceMoveSourceCollection.html
