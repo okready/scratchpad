@@ -606,7 +606,7 @@
 //! [`array_len_for_markers!()`]: macro.array_len_for_markers.html
 //! [`array_type_for_bytes!()`]: macro.array_type_for_bytes.html
 //! [`array_type_for_markers!()`]: macro.array_type_for_markers.html
-//! [`Box`]: https://doc.rust-lang.org/alloc/boxed/index.html
+//! [`Box`]: https://doc.rust-lang.org/std/boxed/index.html
 //! [`Buffer`]: trait.Buffer.html
 //! [`ByteData`]: trait.ByteData.html
 //! [`cache_aligned_zeroed!()`]: macro.cache_aligned_zeroed.html
@@ -645,7 +645,7 @@
 //! [`uninitialized_boxed_slice()`]: fn.uninitialized_boxed_slice.html
 //! [`uninitialized_boxed_slice_for_bytes()`]: fn.uninitialized_boxed_slice_for_bytes.html
 //! [`uninitialized_boxed_slice_for_markers()`]: fn.uninitialized_boxed_slice_for_markers.html
-//! [`Vec`]: https://doc.rust-lang.org/alloc/vec/index.html
+//! [`Vec`]: https://doc.rust-lang.org/std/vec/index.html
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(all(feature = "unstable", not(feature = "std")), feature(alloc))]
