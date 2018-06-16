@@ -361,18 +361,15 @@ fn validate_back_operations() {
 /// using a `Scratchpad` created with `static_new_in_place()`.
 #[test]
 fn validate_front_operations_in_place() {
-    let mut buffer = Vec::with_capacity(1);
     unsafe {
-        buffer.set_len(1);
-        SimpleScratchpad::static_new_in_place(&mut buffer[0]);
+        let mut scratchpad = uninitialized();
+        SimpleScratchpad::static_new_in_place(&mut scratchpad);
+        validate_basic_operations(
+            &scratchpad,
+            |scratchpad| scratchpad.mark_front(),
+            |stack| (stack.iter().map(|x| *x).collect(), ArrayVec::new()),
+        );
     }
-
-    let scratchpad = &buffer[0];
-    validate_basic_operations(
-        scratchpad,
-        |scratchpad| scratchpad.mark_front(),
-        |stack| (stack.iter().map(|x| *x).collect(), ArrayVec::new()),
-    );
 }
 
 /// General test for validating that the internal state of a `Scratchpad` and
@@ -380,30 +377,27 @@ fn validate_front_operations_in_place() {
 /// using a `Scratchpad` created with `static_new_in_place()`.
 #[test]
 fn validate_back_operations_in_place() {
-    let mut buffer = Vec::with_capacity(1);
     unsafe {
-        buffer.set_len(1);
-        SimpleScratchpad::static_new_in_place(&mut buffer[0]);
+        let mut scratchpad = uninitialized();
+        SimpleScratchpad::static_new_in_place(&mut scratchpad);
+        validate_basic_operations(
+            &scratchpad,
+            |scratchpad| scratchpad.mark_back(),
+            |stack| {
+                let flipped_stack = stack
+                    .iter()
+                    .map(|x| {
+                        if *x == core::usize::MAX {
+                            *x
+                        } else {
+                            BUFFER_SIZE - *x
+                        }
+                    })
+                    .collect();
+                (ArrayVec::new(), flipped_stack)
+            },
+        );
     }
-
-    let scratchpad = &buffer[0];
-    validate_basic_operations(
-        scratchpad,
-        |scratchpad| scratchpad.mark_back(),
-        |stack| {
-            let flipped_stack = stack
-                .iter()
-                .map(|x| {
-                    if *x == core::usize::MAX {
-                        *x
-                    } else {
-                        BUFFER_SIZE - *x
-                    }
-                })
-                .collect();
-            (ArrayVec::new(), flipped_stack)
-        },
-    );
 }
 
 /// Shared implementation for `validate_front_memory_limits()` and
@@ -466,18 +460,15 @@ fn validate_back_memory_limits() {
 /// using a `Scratchpad` created with `static_new_in_place()`.
 #[test]
 fn validate_front_memory_limits_in_place() {
-    let mut buffer = Vec::with_capacity(1);
     unsafe {
-        buffer.set_len(1);
-        SimpleScratchpad::static_new_in_place(&mut buffer[0]);
+        let mut scratchpad = uninitialized();
+        SimpleScratchpad::static_new_in_place(&mut scratchpad);
+        validate_memory_limits(
+            &scratchpad,
+            |scratchpad| scratchpad.mark_front(),
+            |scratchpad| scratchpad.mark_back(),
+        );
     }
-
-    let scratchpad = &buffer[0];
-    validate_memory_limits(
-        scratchpad,
-        |scratchpad| scratchpad.mark_front(),
-        |scratchpad| scratchpad.mark_back(),
-    );
 }
 
 /// Verifies that the available space for allocations at the back of a
@@ -485,18 +476,15 @@ fn validate_front_memory_limits_in_place() {
 /// using a `Scratchpad` created with `static_new_in_place()`.
 #[test]
 fn validate_back_memory_limits_in_place() {
-    let mut buffer = Vec::with_capacity(1);
     unsafe {
-        buffer.set_len(1);
-        SimpleScratchpad::static_new_in_place(&mut buffer[0]);
+        let mut scratchpad = uninitialized();
+        SimpleScratchpad::static_new_in_place(&mut scratchpad);
+        validate_memory_limits(
+            &scratchpad,
+            |scratchpad| scratchpad.mark_back(),
+            |scratchpad| scratchpad.mark_front(),
+        );
     }
-
-    let scratchpad = &buffer[0];
-    validate_memory_limits(
-        scratchpad,
-        |scratchpad| scratchpad.mark_back(),
-        |scratchpad| scratchpad.mark_front(),
-    );
 }
 
 /// Shared implementation for `validate_front_marker_limits()` and
