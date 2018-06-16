@@ -114,10 +114,17 @@
 //!
 //! If you decide to use static arrays for both allocation storage and marker
 //! tracking, [`Scratchpad::static_new()`] can be used to create the
-//! scratchpad without having to construct the arrays separately. Note that
-//! using large static array buffers can cause the program to run out of stack
-//! space during initialization, so you may need to stick to either boxed
-//! slices or slices of externally owned arrays.
+//! scratchpad without having to construct the arrays separately.
+//!
+//! Note using large static array buffers can cause the program to run
+//! out of stack space when using [`new()`][`Scratchpad::new()`] or
+//! [`static_new()`][`Scratchpad::static_new()`].
+//! [`Scratchpad::static_new_in_place()`] provides the ability to create a
+//! scratchpad within a specific block of (uninitialized) memory while
+//! guaranteeing that the allocation and marker tracking buffers never touch
+//! the stack. Keep in mind that this function is `unsafe`, so you may need to
+//! use either boxed slices or slices of externally owned arrays instead of
+//! static arrays if you wish to avoid `unsafe` code.
 //!
 //! ## Creating Allocation Markers
 //!
@@ -445,12 +452,6 @@
 //!   slice concatenation methods of [`Marker`]) only support tuples with up
 //!   to 12 items (most `std` library traits implemented for tuples are also
 //!   limited to 12 items as well).
-//! - Using large static arrays as buffers can cause the program stack to
-//!   overflow during scratchpad creation, particularly in debug builds. Using
-//!   [`Scratchpad::static_new()`] instead of [`Scratchpad::new()`] can help
-//!   avoid such issues, but it is not guaranteed to always work. Using either
-//!   boxed slices or slice references of externally owned arrays for storage
-//!   can help avoid such issues entirely.
 //!
 //! ## Mutability Notes
 //!
@@ -636,6 +637,7 @@
 //! [`Scratchpad::mark_front()`]: struct.Scratchpad.html#method.mark_front
 //! [`Scratchpad::new()`]: struct.Scratchpad.html#method.new
 //! [`Scratchpad::static_new()`]: struct.Scratchpad.html#method.static_new
+//! [`Scratchpad::static_new_in_place()`]: struct.Scratchpad.html#method.static_new_in_place
 //! [`SliceSource`]: trait.SliceSource.html
 //! [`SliceSourceCollection`]: trait.SliceSourceCollection.html
 //! [`SliceMoveSourceCollection`]: trait.SliceMoveSourceCollection.html
