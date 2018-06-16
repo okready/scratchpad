@@ -403,13 +403,9 @@ where
     /// types backed entirely by static arrays.
     ///
     /// This is provided to allow for creation of scratchpads backed by large
-    /// static arrays without storing any large parameters or return values on
-    /// the stack.
-    ///
-    /// Since static array [`Buffer`] and [`Tracking`] types are owned by the
-    /// scratchpad, and their sizes are known ahead of time to the scratchpad
-    /// type, scratchpads using only static arrays for storage can be created
-    /// without having to provide any parameters.
+    /// static arrays while guaranteeing that both arrays and the created
+    /// `Scratchpad` are never accidentally stored on the stack, avoiding
+    /// possible stack overflow.
     ///
     /// # Safety
     ///
@@ -444,7 +440,8 @@ where
     /// # fn main() {
     /// unsafe {
     ///     // The `Vec` here represents any region of memory in which a
-    ///     // `Scratchpad` needs to be initialized at runtime.
+    ///     // `Scratchpad` needs to be initialized at runtime, whether
+    ///     // allocated from the heap or elsewhere.
     ///     let mut memory = Vec::with_capacity(1);
     ///     memory.set_len(1);
     ///
