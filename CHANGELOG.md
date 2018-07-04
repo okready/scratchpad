@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   proper alignment for storage of `usize` and `isize` values.
 
 ### Changed
+- Separate out `alloc` library support from the "unstable" crate feature into
+  its own "alloc" feature.
 - Only implement `Tracking` for `SizeAlignedBuffer` types (implemented by
   default for arrays and slices of `usize`, `isize`, and `CacheAligned`
   elements), and use normal (aligned) reads and writes in the associated

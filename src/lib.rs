@@ -266,11 +266,13 @@
 //!   tracking as well as both boxes and vectors to be used as slice sources
 //!   for [`Marker`] methods that take slices as parameters. Enabled by
 //!   default; can be disabled to build the crate with `#![no_std]`.
-//! - **`unstable`**: Enables unstable toolchain features (requires a nightly
-//!   compiler). Disabled by default. Enabling this feature includes:
-//!   - Support for [`Box`] and [`Vec`] types as mentioned with the `std`
-//!     feature, regardless of whether the `std` feature is enabled (if `std`
-//!     is disabled, this will use the `alloc` library directly).
+//! - **`alloc`**: Implements various traits for [`Box`] and [`Vec`] types in
+//!   a similar manner as the `std` feature, but uses [`liballoc`] instead of
+//!   [`libstd`]. This feature is ignored if `std` is also enabled. Requires a
+//!   nightly toolchain; disabled by default.
+//! - **`unstable`**: Enables the use of miscellaneous unstable language
+//!   features. Requires a nightly compiler; disabled by default. Enabling
+//!   this feature includes:
 //!   - Declaration of the function [`Scratchpad::new()`] as `const`.
 //!   - [`ByteData`] trait implementations for `u128`/`i128` for Rust versions
 //!     prior to 1.26 (`u128`/`i128` support is enabled by default with both
@@ -637,6 +639,8 @@
 //! [`extend()`]: trait.Marker.html#method.extend
 //! [`extend_clone()`]: trait.Marker.html#method.extend_clone
 //! [`extend_copy()`]: trait.Marker.html#method.extend_copy
+//! [`liballoc`]: https://doc.rust-lang.org/alloc/
+//! [`libstd`]: https://doc.rust-lang.org/std/
 //! [`Marker`]: trait.Marker.html
 //! [`Marker::concat_slices()`]: trait.Marker.html#method.concat_slices
 //! [`Marker::concat_slices_clone()`]: trait.Marker.html#method.concat_slices_clone
@@ -667,10 +671,10 @@
 //! [`Vec`]: https://doc.rust-lang.org/alloc/vec/index.html
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(all(feature = "unstable", not(feature = "std")), feature(alloc))]
+#![cfg_attr(all(feature = "alloc", not(feature = "std")), feature(alloc))]
 #![cfg_attr(feature = "unstable", feature(const_fn))]
 
-#[cfg(all(feature = "unstable", not(feature = "std")))]
+#[cfg(all(feature = "alloc", not(feature = "std")))]
 extern crate alloc;
 #[cfg(feature = "std")]
 extern crate core;
@@ -683,9 +687,9 @@ use std::boxed::Box;
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
-#[cfg(all(feature = "unstable", not(feature = "std")))]
+#[cfg(all(feature = "alloc", not(feature = "std")))]
 use alloc::boxed::Box;
-#[cfg(all(feature = "unstable", not(feature = "std")))]
+#[cfg(all(feature = "alloc", not(feature = "std")))]
 use alloc::vec::Vec;
 
 // Re-export `size_of()` for easier use with our exported macros.

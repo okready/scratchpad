@@ -69,16 +69,22 @@ scratchpad = { version = "2.0", default-features = false }
 ```
 
 `Box` and `Vec` support is still available for `no_std` builds when using a
-nightly toolchain by enabling the `unstable` crate feature.
+nightly toolchain by enabling the `alloc` crate feature.
+
+```toml
+[dependencies]
+scratchpad = {
+    version = "2.0",
+    default-features = false,
+    features = ["alloc"],
+}
+```
 
 ## Unstable Features
 
-The `unstable` crate feature provides some additional functionality when using
-a nightly toolchain:
+The `unstable` crate feature provides some miscellaneous additional
+functionality when using a nightly toolchain:
 
-- Support for `Box` and `Vec` types as mentioned with the `std` feature,
-  regardless of whether the `std` feature is enabled (if `std` is disabled,
-  this will use the `alloc` library directly).
 - Declaration of the function `Scratchpad::new()` as `const`.
 - `ByteData` trait implementations for `u128`/`i128` for Rust versions prior
   to 1.26 (`u128`/`i128` support is enabled by default with both stable and

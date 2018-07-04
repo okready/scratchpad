@@ -9,8 +9,8 @@ rust:
 - beta
 - nightly
 env:
-- FEATURE_ARGS=""
-- FEATURE_ARGS="--lib --no-default-features"
+- FEATURE_ARGS=''
+- FEATURE_ARGS='--lib --no-default-features'
 
 matrix:
   include:
@@ -26,10 +26,21 @@ matrix:
     # `clippy` may fail to build with certain nightly toolchain releases, so
     # ignore lint tests if this happens.
     - if cargo install clippy; then cargo clippy; fi
+  # The `alloc` feature should have no effect when `std` is also enabled, but
+  # we should include builds with both enabled anyway to ensure no
+  # side-effects are caused.
   - rust: nightly
-    env: FEATURE_ARGS="--features unstable"
+    env: FEATURE_ARGS='--features alloc'
   - rust: nightly
-    env: FEATURE_ARGS="--features unstable --lib --no-default-features"
+    env: FEATURE_ARGS='--features alloc --lib --no-default-features'
+  - rust: nightly
+    env: FEATURE_ARGS='--features unstable'
+  - rust: nightly
+    env: FEATURE_ARGS='--features unstable --lib --no-default-features'
+  - rust: nightly
+    env: FEATURE_ARGS='--features "alloc unstable"'
+  - rust: nightly
+    env: FEATURE_ARGS='--features "alloc unstable" --lib --no-default-features'
 
 script:
 - cargo test $FEATURE_ARGS --verbose

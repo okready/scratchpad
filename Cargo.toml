@@ -17,10 +17,15 @@ travis-ci = { repository = "okready/scratchpad" }
 [features]
 default = ["std"]
 
-# Allow `std` library usage (`Box` and `Vec` support).
+# Allow `std` library usage (used for `Box` and `Vec` support).
 std = []
 
-# Allow unstable features (requires a nightly toolchain).
+# Allow `alloc` library usage (used for `Box` and `Vec` support without using
+# `std`). Requires a nightly toolchain. Ignored if the `std` feature is
+# enabled.
+alloc = []
+
+# Allow miscellaneous unstable features. Requires a nightly toolchain.
 unstable = []
 
 [build-dependencies]
