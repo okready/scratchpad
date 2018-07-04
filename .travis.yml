@@ -9,8 +9,8 @@ rust:
 - beta
 - nightly
 env:
-- FEATURE_ARGS=''
-- FEATURE_ARGS='--lib --no-default-features'
+- FEATURES="" OTHER_ARGS=""
+- FEATURES="" OTHER_ARGS="--lib --no-default-features"
 
 matrix:
   include:
@@ -30,21 +30,21 @@ matrix:
   # we should include builds with both enabled anyway to ensure no
   # side-effects are caused.
   - rust: nightly
-    env: FEATURE_ARGS='--features alloc'
+    env: FEATURES="alloc" OTHER_ARGS=""
   - rust: nightly
-    env: FEATURE_ARGS='--features alloc --lib --no-default-features'
+    env: FEATURES="alloc" OTHER_ARGS="--lib --no-default-features"
   - rust: nightly
-    env: FEATURE_ARGS='--features unstable'
+    env: FEATURES="unstable" OTHER_ARGS=""
   - rust: nightly
-    env: FEATURE_ARGS='--features unstable --lib --no-default-features'
+    env: FEATURES="unstable" OTHER_ARGS="--lib --no-default-features"
   - rust: nightly
-    env: FEATURE_ARGS='--features "alloc unstable"'
+    env: FEATURES="alloc unstable" OTHER_ARGS=""
   - rust: nightly
-    env: FEATURE_ARGS='--features "alloc unstable" --lib --no-default-features'
+    env: FEATURES="alloc unstable" OTHER_ARGS="--lib --no-default-features"
 
 script:
-- cargo test $FEATURE_ARGS --verbose
-- cargo test $FEATURE_ARGS --verbose --release
+- cargo test --features "$FEATURES" $OTHER_ARGS --verbose
+- cargo test --features "$FEATURES" $OTHER_ARGS --verbose --release
 
 notifications:
   email:
