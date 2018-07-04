@@ -115,10 +115,17 @@
 //!
 //! If you decide to use static arrays for both allocation storage and marker
 //! tracking, [`Scratchpad::static_new()`] can be used to create the
-//! scratchpad without having to construct the arrays separately. Note that
-//! using large static array buffers can cause the program to run out of stack
-//! space during initialization, so you may need to stick to either boxed
-//! slices or slices of externally owned arrays.
+//! scratchpad without having to construct the arrays separately.
+//!
+//! Note using large static array buffers can cause the program to run
+//! out of stack space when using [`new()`][`Scratchpad::new()`] or
+//! [`static_new()`][`Scratchpad::static_new()`].
+//! [`Scratchpad::static_new_in_place()`] provides the ability to create a
+//! scratchpad within a specific block of (uninitialized) memory while
+//! guaranteeing that the allocation and marker tracking buffers never touch
+//! the stack. Keep in mind that this function is `unsafe`, so you may need to
+//! use either boxed slices or slices of externally owned arrays instead of
+//! static arrays if you wish to avoid `unsafe` code.
 //!
 //! ## Creating Allocation Markers
 //!
@@ -465,12 +472,6 @@
 //!   slice concatenation methods of [`Marker`]) only support tuples with up
 //!   to 12 items (most `std` library traits implemented for tuples are also
 //!   limited to 12 items as well).
-//! - Using large static arrays as buffers can cause the program stack to
-//!   overflow during scratchpad creation, particularly in debug builds. Using
-//!   [`Scratchpad::static_new()`] instead of [`Scratchpad::new()`] can help
-//!   avoid such issues, but it is not guaranteed to always work. Using either
-//!   boxed slices or slice references of externally owned arrays for storage
-//!   can help avoid such issues entirely.
 //!
 //! ## Mutability Notes
 //!
@@ -625,7 +626,7 @@
 //! [`array_len_for_markers!()`]: macro.array_len_for_markers.html
 //! [`array_type_for_bytes!()`]: macro.array_type_for_bytes.html
 //! [`array_type_for_markers!()`]: macro.array_type_for_markers.html
-//! [`Box`]: https://doc.rust-lang.org/alloc/boxed/index.html
+//! [`Box`]: https://doc.rust-lang.org/std/boxed/index.html
 //! [`Buffer`]: trait.Buffer.html
 //! [`ByteData`]: trait.ByteData.html
 //! [`cache_aligned_zeroed!()`]: macro.cache_aligned_zeroed.html
@@ -660,6 +661,7 @@
 //! [`Scratchpad::mark_front()`]: struct.Scratchpad.html#method.mark_front
 //! [`Scratchpad::new()`]: struct.Scratchpad.html#method.new
 //! [`Scratchpad::static_new()`]: struct.Scratchpad.html#method.static_new
+//! [`Scratchpad::static_new_in_place()`]: struct.Scratchpad.html#method.static_new_in_place
 //! [`SizeAlignedBuffer`]: trait.SizeAlignedBuffer.html
 //! [`SliceSource`]: trait.SliceSource.html
 //! [`SliceSourceCollection`]: trait.SliceSourceCollection.html
@@ -668,7 +670,7 @@
 //! [`uninitialized_boxed_slice()`]: fn.uninitialized_boxed_slice.html
 //! [`uninitialized_boxed_slice_for_bytes()`]: fn.uninitialized_boxed_slice_for_bytes.html
 //! [`uninitialized_boxed_slice_for_markers()`]: fn.uninitialized_boxed_slice_for_markers.html
-//! [`Vec`]: https://doc.rust-lang.org/alloc/vec/index.html
+//! [`Vec`]: https://doc.rust-lang.org/std/vec/index.html
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(all(feature = "alloc", not(feature = "std")), feature(alloc))]

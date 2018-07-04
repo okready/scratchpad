@@ -265,6 +265,12 @@ where
 {
     /// Creates a new scratchpad instance.
     ///
+    /// Note that using large static arrays for allocation storage or marker
+    /// tracking can cause the program to run out of stack space while calling
+    /// this function. It is recommended to either use borrowed slices or
+    /// boxed slices if this occurs, or alternatively use the unsafe
+    /// [`static_new_in_place()`] function to create the `Scratchpad`.
+    ///
     /// # Examples
     ///
     /// ```
@@ -284,6 +290,8 @@ where
     /// ) };
     /// # }
     /// ```
+    ///
+    /// [`static_new_in_place()`]: #method.static_new_in_place
     #[inline(always)]
     #[cfg(feature = "unstable")]
     pub const fn new(buffer: BufferT, tracking: TrackingT) -> Self {
@@ -299,6 +307,12 @@ where
 
     /// Creates a new scratchpad instance.
     ///
+    /// Note that using large static arrays for allocation storage or marker
+    /// tracking can cause the program to run out of stack space while calling
+    /// this function. It is recommended to either use borrowed slices or
+    /// boxed slices if this occurs, or alternatively use the unsafe
+    /// [`static_new_in_place()`] function to create the `Scratchpad`.
+    ///
     /// # Examples
     ///
     /// ```
@@ -318,6 +332,8 @@ where
     /// ) };
     /// # }
     /// ```
+    ///
+    /// [`static_new_in_place()`]: #method.static_new_in_place
     #[inline(always)]
     #[cfg(not(feature = "unstable"))]
     pub fn new(buffer: BufferT, tracking: TrackingT) -> Self {
@@ -345,10 +361,11 @@ where
     /// type, scratchpads using only static arrays for storage can be created
     /// without having to provide any parameters.
     ///
-    /// Note that this cannot be `const` as there is no support in Rust for
-    /// creating uninitialized values in `const` code. [`Scratchpad::new()`]
-    /// must be used with the `unstable` crate feature enabled if `const` code
-    /// is required.
+    /// Note that using large static arrays for allocation storage or marker
+    /// tracking can cause the program to run out of stack space while calling
+    /// this function. It is recommended to either use borrowed slices or
+    /// boxed slices if this occurs, or alternatively use the unsafe
+    /// [`static_new_in_place()`] function to create the `Scratchpad`.
     ///
     /// # Examples
     ///
@@ -369,7 +386,7 @@ where
     ///
     /// [`Buffer`]: trait.Buffer.html
     /// [`Tracking`]: trait.Tracking.html
-    /// [`Scratchpad::new()`]: #method.new
+    /// [`static_new_in_place()`]: #method.static_new_in_place
     #[inline(always)]
     pub fn static_new() -> Self {
         Scratchpad {
@@ -386,13 +403,9 @@ where
     /// types backed entirely by static arrays.
     ///
     /// This is provided to allow for creation of scratchpads backed by large
-    /// static arrays without storing any large parameters or return values on
-    /// the stack.
-    ///
-    /// Since static array [`Buffer`] and [`Tracking`] types are owned by the
-    /// scratchpad, and their sizes are known ahead of time to the scratchpad
-    /// type, scratchpads using only static arrays for storage can be created
-    /// without having to provide any parameters.
+    /// static arrays while guaranteeing that both arrays and the created
+    /// `Scratchpad` are never accidentally stored on the stack, avoiding
+    /// possible stack overflow.
     ///
     /// # Safety
     ///
@@ -427,7 +440,8 @@ where
     /// # fn main() {
     /// unsafe {
     ///     // The `Vec` here represents any region of memory in which a
-    ///     // `Scratchpad` needs to be initialized at runtime.
+    ///     // `Scratchpad` needs to be initialized at runtime, whether
+    ///     // allocated from the heap or elsewhere.
     ///     let mut memory = Vec::with_capacity(1);
     ///     memory.set_len(1);
     ///

@@ -6,11 +6,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 ### Added
-- `Scratchpad::static_new_in_place()` for initializing a `Scratchpad` within
-  a block of uninitialized memory for `Scratchpad` types that use only static
-  arrays for backing memory, bypassing potential call stack use for parameters
-  and return values that may exceed the amount of space available on the
-  stack.
 - `SizeAlignedByteData` trait for `ByteData` types that are guaranteed to
   provide proper alignment for storage of `usize` and `isize` values.
 - `SizeAlignedBuffer` trait for `Buffer` types that are guaranteed to provide
@@ -24,6 +19,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   elements), and use normal (aligned) reads and writes in the associated
   `Tracking::get()` and `Tracking::set()` implementations, avoiding the
   performance penalties associated with supporting unaligned reads and writes.
+
+## [1.1.0] - 2018-06-16
+### Added
+- `Scratchpad::static_new_in_place()` for initializing a `Scratchpad` within
+  a block of uninitialized memory for `Scratchpad` types that use only static
+  arrays for backing memory, bypassing potential call stack use for parameters
+  and return values that may exceed the amount of space available on the
+  stack.
 
 ## [1.0.1] - 2018-06-07
 ### Fixed
@@ -188,7 +191,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Added
 - Initial release.
 
-[Unreleased]: https://github.com/okready/scratchpad/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/okready/scratchpad/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/okready/scratchpad/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/okready/scratchpad/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/okready/scratchpad/compare/v1.0.0-beta.2...v1.0.0
 [1.0.0-beta.2]: https://github.com/okready/scratchpad/compare/v1.0.0-beta.1...v1.0.0-beta.2

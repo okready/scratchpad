@@ -356,6 +356,50 @@ fn validate_back_operations() {
     );
 }
 
+/// General test for validating that the internal state of a `Scratchpad` and
+/// `Marker` match the expected state across various "front" operations when
+/// using a `Scratchpad` created with `static_new_in_place()`.
+#[test]
+fn validate_front_operations_in_place() {
+    unsafe {
+        let mut scratchpad = uninitialized();
+        SimpleScratchpad::static_new_in_place(&mut scratchpad);
+        validate_basic_operations(
+            &scratchpad,
+            |scratchpad| scratchpad.mark_front(),
+            |stack| (stack.iter().map(|x| *x).collect(), ArrayVec::new()),
+        );
+    }
+}
+
+/// General test for validating that the internal state of a `Scratchpad` and
+/// `Marker` match the expected state across various "back" operations when
+/// using a `Scratchpad` created with `static_new_in_place()`.
+#[test]
+fn validate_back_operations_in_place() {
+    unsafe {
+        let mut scratchpad = uninitialized();
+        SimpleScratchpad::static_new_in_place(&mut scratchpad);
+        validate_basic_operations(
+            &scratchpad,
+            |scratchpad| scratchpad.mark_back(),
+            |stack| {
+                let flipped_stack = stack
+                    .iter()
+                    .map(|x| {
+                        if *x == core::usize::MAX {
+                            *x
+                        } else {
+                            BUFFER_SIZE - *x
+                        }
+                    })
+                    .collect();
+                (ArrayVec::new(), flipped_stack)
+            },
+        );
+    }
+}
+
 /// Shared implementation for `validate_front_memory_limits()` and
 /// `validate_back_memory_limits()`
 fn validate_memory_limits<'scratchpad, MF, OF, M, O>(
@@ -409,6 +453,38 @@ fn validate_back_memory_limits() {
         |scratchpad| scratchpad.mark_back(),
         |scratchpad| scratchpad.mark_front(),
     );
+}
+
+/// Verifies that the available space for allocations at the front of a
+/// scratchpad is correctly adjusted as allocations at the back increase when
+/// using a `Scratchpad` created with `static_new_in_place()`.
+#[test]
+fn validate_front_memory_limits_in_place() {
+    unsafe {
+        let mut scratchpad = uninitialized();
+        SimpleScratchpad::static_new_in_place(&mut scratchpad);
+        validate_memory_limits(
+            &scratchpad,
+            |scratchpad| scratchpad.mark_front(),
+            |scratchpad| scratchpad.mark_back(),
+        );
+    }
+}
+
+/// Verifies that the available space for allocations at the back of a
+/// scratchpad is correctly adjusted as allocations at the front increase when
+/// using a `Scratchpad` created with `static_new_in_place()`.
+#[test]
+fn validate_back_memory_limits_in_place() {
+    unsafe {
+        let mut scratchpad = uninitialized();
+        SimpleScratchpad::static_new_in_place(&mut scratchpad);
+        validate_memory_limits(
+            &scratchpad,
+            |scratchpad| scratchpad.mark_back(),
+            |scratchpad| scratchpad.mark_front(),
+        );
+    }
 }
 
 /// Shared implementation for `validate_front_marker_limits()` and
@@ -466,6 +542,38 @@ fn validate_back_marker_limits() {
         |scratchpad| scratchpad.mark_back(),
         |scratchpad| scratchpad.mark_front(),
     );
+}
+
+/// Verifies that the available space for tracking markers at the front of a
+/// scratchpad is correctly adjusted as markers set at the back increase when
+/// using a `Scratchpad` created with `static_new_in_place()`.
+#[test]
+fn validate_front_marker_limits_in_place() {
+    unsafe {
+        let mut scratchpad = uninitialized();
+        SimpleScratchpad::static_new_in_place(&mut scratchpad);
+        validate_marker_limits(
+            &scratchpad,
+            |scratchpad| scratchpad.mark_front(),
+            |scratchpad| scratchpad.mark_back(),
+        );
+    }
+}
+
+/// Verifies that the available space for tracking markers at the back of a
+/// scratchpad is correctly adjusted as markers set at the front increase when
+/// using a `Scratchpad` created with `static_new_in_place()`.
+#[test]
+fn validate_back_marker_limits_in_place() {
+    unsafe {
+        let mut scratchpad = uninitialized();
+        SimpleScratchpad::static_new_in_place(&mut scratchpad);
+        validate_marker_limits(
+            &scratchpad,
+            |scratchpad| scratchpad.mark_back(),
+            |scratchpad| scratchpad.mark_front(),
+        );
+    }
 }
 
 /// Verifies `Allocation::unwrap()` doesn't accidentally drop or leak data.
