@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   [`owning_ref`](https://crates.io/crates/owning_ref) and
   [`rental`](https://crates.io/crates/rental).
 
+### Fixed
+- Minor documentation fixes.
+
 ## [1.1.0] - 2018-06-16
 ### Added
 - `Scratchpad::static_new_in_place()` for initializing a `Scratchpad` within
