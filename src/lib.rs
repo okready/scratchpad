@@ -168,7 +168,9 @@
 //! either explicitly using the unary `*` operator (e.g. `*allocation`) or
 //! implicitly, such as when calling methods provided by the allocated data
 //! type (e.g. `allocation.len()` for retrieving the number of elements in an
-//! `Allocation<[i32]>`).
+//! `Allocation<[i32]>`). Allocations also implement [`StableDeref`], allowing
+//! them to be used with crates that support the trait such as [`owning_ref`]
+//! and [`rental`].
 //!
 //! ```
 //! # use scratchpad::Scratchpad;
@@ -659,6 +661,8 @@
 //! [`MarkerFront::append()`]: struct.MarkerFront.html#method.append
 //! [`MarkerFront::append_clone()`]: struct.MarkerFront.html#method.append_clone
 //! [`MarkerFront::append_copy()`]: struct.MarkerFront.html#method.append_copy
+//! [`owning_ref`]: https://crates.io/crates/owning_ref
+//! [`rental`]: https://crates.io/crates/rental
 //! [`Scratchpad`]: struct.Scratchpad.html
 //! [`Scratchpad::mark_back()`]: struct.Scratchpad.html#method.mark_back
 //! [`Scratchpad::mark_front()`]: struct.Scratchpad.html#method.mark_front
@@ -668,6 +672,7 @@
 //! [`SliceSource`]: trait.SliceSource.html
 //! [`SliceSourceCollection`]: trait.SliceSourceCollection.html
 //! [`SliceMoveSourceCollection`]: trait.SliceMoveSourceCollection.html
+//! [`StableDeref`]: https://crates.io/crates/stable_deref_trait
 //! [`Tracking`]: trait.Tracking.html
 //! [`uninitialized_boxed_slice()`]: fn.uninitialized_boxed_slice.html
 //! [`uninitialized_boxed_slice_for_bytes()`]: fn.uninitialized_boxed_slice_for_bytes.html
@@ -682,6 +687,8 @@
 extern crate alloc;
 #[cfg(feature = "std")]
 extern crate core;
+
+extern crate stable_deref_trait;
 
 #[cfg(test)]
 extern crate arrayvec;
