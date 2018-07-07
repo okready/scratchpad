@@ -15,6 +15,9 @@ use core::str;
 use super::CacheAligned;
 use core::mem::{forget, size_of};
 
+#[cfg(feature = "std")]
+use std::ffi::CStr;
+
 #[cfg(any(feature = "std", feature = "unstable"))]
 use super::{Box, Vec};
 #[cfg(any(feature = "std", feature = "unstable"))]
@@ -424,6 +427,160 @@ impl SliceLike for str {
     }
 }
 
+#[cfg(feature = "std")]
+impl SliceLike for CStr {
+    /// Slice element type.
+    ///
+    /// `u8` is used as the element type instead of [`c_char`], as the
+    /// [`CStr`] methods that handle conversions to and from slices work with
+    /// `u8` slices (`c_char` is only used when working with raw pointers).
+    ///
+    /// [`c_char`]: https://doc.rust-lang.org/std/os/raw/type.c_char.html
+    /// [`CStr`]: https://doc.rust-lang.org/std/ffi/struct.CStr.html
+    type Element = u8;
+
+    /// Returns a slice of `Self::Element` elements containing this slice's
+    /// data.
+    ///
+    /// This uses [`CStr::to_bytes_with_nul()`] to return the entire [`CStr`]
+    /// contents, including the nul terminator.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::SliceLike;
+    /// use std::ffi::CString;
+    ///
+    /// let message = CString::new("foo").unwrap();
+    /// let message_c_str = message.as_c_str();
+    /// let bytes = message_c_str.as_element_slice();
+    /// assert_eq!(bytes, &[b'f', b'o', b'o', b'\0']);
+    /// ```
+    ///
+    /// [`CStr::to_bytes_with_nul()`]: https://doc.rust-lang.org/std/ffi/struct.CStr.html#method.to_bytes_with_nul
+    /// [`CStr`]: https://doc.rust-lang.org/std/ffi/struct.CStr.html
+    #[inline]
+    fn as_element_slice(&self) -> &[Self::Element] {
+        self.to_bytes_with_nul()
+    }
+
+    /// Returns a mutable slice of `Self::Element` elements containing this
+    /// slice's data.
+    ///
+    /// This is roughly equivalent to [`CStr::to_bytes_with_nul()`], returning
+    /// a mutable slice instead of an immutable slice.
+    ///
+    /// # Safety
+    ///
+    /// This function potentially allows for modification of the [`CStr`]
+    /// contents outside of any validity checks, specifically checks for a nul
+    /// terminator and no internal nul bytes. Improper use of this function
+    /// can result in undefined behavior.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::SliceLike;
+    /// use std::ffi::{CStr, CString};
+    ///
+    /// let mut message = CString::new("foo").unwrap().into_boxed_c_str();
+    /// let message_c_str = &mut *message;
+    ///
+    /// unsafe {
+    ///     let bytes = message_c_str.as_element_slice_mut();
+    ///     bytes[0] = b'b';
+    ///     bytes[1] = b'a';
+    ///     bytes[2] = b'r';
+    /// }
+    ///
+    /// assert_eq!(
+    ///     message_c_str,
+    ///     CStr::from_bytes_with_nul(b"bar\0").unwrap(),
+    /// );
+    /// ```
+    ///
+    /// [`CStr::to_bytes_with_nul()`]: https://doc.rust-lang.org/std/ffi/struct.CStr.html#method.to_bytes_with_nul
+    /// [`CStr`]: https://doc.rust-lang.org/std/ffi/struct.CStr.html
+    #[inline]
+    unsafe fn as_element_slice_mut(&mut self) -> &mut [Self::Element] {
+        // This looks dangerous, but I would think it's safe to assume the
+        // compiler won't perform any optimizations that break our conversion
+        // from a `*const [u8]` to a `*mut [u8]` considering we still maintain
+        // a mutable reference to `self` throughout this function (and the
+        // lifetime of the returned slice due to Rust's borrowing rules).
+        &mut *(self.to_bytes_with_nul() as *const [u8] as *mut [u8])
+    }
+
+    /// Reinterprets a slice of `Self::Inner` elements as a slice of this
+    /// type.
+    ///
+    /// This uses [`CStr::from_bytes_with_nul_unchecked()`] to create a
+    /// [`CStr`] from a nul-terminated byte slice.
+    ///
+    /// # Safety
+    ///
+    /// No safety checking is performed on the provided byte slice. It
+    /// **must** be nul-terminated and not contain any interior nul bytes.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::SliceLike;
+    /// use std::ffi::CStr;
+    ///
+    /// let bytes = [b'f', b'o', b'o', b'\0'];
+    /// let message = unsafe {
+    ///     <CStr as SliceLike>::from_element_slice(&bytes[..])
+    /// };
+    /// assert_eq!(message, CStr::from_bytes_with_nul(b"foo\0").unwrap());
+    /// ```
+    ///
+    /// [`CStr::from_bytes_with_nul_unchecked()`]: https://doc.rust-lang.org/std/ffi/struct.CStr.html#method.from_bytes_with_nul_unchecked
+    /// [`CStr`]: https://doc.rust-lang.org/std/ffi/struct.CStr.html
+    #[inline]
+    unsafe fn from_element_slice(slice: &[Self::Element]) -> &Self {
+        CStr::from_bytes_with_nul_unchecked(slice)
+    }
+
+    /// Reinterprets a mutable slice of `Self::Inner` elements as a mutable
+    /// slice of this type.
+    ///
+    /// This is roughly equivalent to
+    /// [`CStr::from_bytes_with_nul_unchecked()`], returning a mutable
+    /// [`CStr`] reference instead of an immutable reference.
+    ///
+    /// # Safety
+    ///
+    /// No safety checking is performed on the provided byte slice. It
+    /// **must** be nul-terminated and not contain any interior nul bytes.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scratchpad::SliceLike;
+    /// use std::ffi::CStr;
+    ///
+    /// let mut bytes = [b'f', b'o', b'o', b'\0'];
+    /// let message = unsafe {
+    ///     <CStr as SliceLike>::from_element_slice_mut(&mut bytes[..])
+    /// };
+    /// assert_eq!(message, CStr::from_bytes_with_nul(b"foo\0").unwrap());
+    /// ```
+    ///
+    /// [`CStr::from_bytes_with_nul_unchecked()`]: https://doc.rust-lang.org/std/ffi/struct.CStr.html#method.from_bytes_with_nul_unchecked
+    /// [`CStr`]: https://doc.rust-lang.org/std/ffi/struct.CStr.html
+    #[inline]
+    unsafe fn from_element_slice_mut(
+        slice: &mut [Self::Element],
+    ) -> &mut Self {
+        // This makes the same assumption as `as_element_slice_mut()` above
+        // (i.e. we should be okay due to the fact that we maintain mutable
+        // references to the same data before and after the ugly casts).
+        &mut *(CStr::from_bytes_with_nul_unchecked(slice) as *const CStr
+            as *mut CStr)
+    }
+}
+
 /// Extension of the [`SliceLike`] trait used to mark DSTs for which
 /// concatenation can safely be performed by concatenating the underlying
 /// slice type.
@@ -505,6 +662,21 @@ unsafe impl IntoMutSliceLikePtr<[u8]> for str {
     #[inline]
     fn into_mut_slice_like_ptr(ptr: *mut str) -> *mut [u8] {
         unsafe { (*ptr).as_bytes_mut() }
+    }
+}
+
+#[cfg(feature = "std")]
+unsafe impl IntoMutSliceLikePtr<[u8]> for CStr {
+    // TODO: While the current implementation of `CStr` doesn't require
+    //       dereferencing `ptr` in order to convert to a `*mut [u8]`, it may
+    //       in the future, so the `not_unsafe_ptr_arg_deref` lint warning is
+    //       valid in this context. Since `IntoMutSliceLikePtr` is a public
+    //       trait, adding `unsafe` to this function would be a breaking
+    //       change, so we can't do so until the 2.0 release.
+    #[allow(unknown_lints, not_unsafe_ptr_arg_deref)]
+    #[inline]
+    fn into_mut_slice_like_ptr(ptr: *mut CStr) -> *mut [u8] {
+        unsafe { (*ptr).as_element_slice_mut() }
     }
 }
 

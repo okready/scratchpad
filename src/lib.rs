@@ -30,6 +30,7 @@
 //!   - [Memory Overhead](#memory-overhead)
 //!   - [Limitations](#limitations)
 //!   - [Mutability Notes](#mutability-notes)
+//! - [Known Issues](#known-issues)
 //! - [Example - Temporary Thread-local Allocations](#example---temporary-thread-local-allocations)
 //!
 //! # Overview
@@ -463,6 +464,29 @@
 //! have any side effect on other existing allocations, so there are no
 //! special considerations necessary by the user.
 //!
+//! # Known Issues
+//!
+//! - [`IntoMutSliceLikePtr::into_mut_slice_like_ptr()`] is not declared as
+//!   `unsafe`, as the implementations included by this crate don't need to
+//!   read the data pointed to by pointer given at this time (they can operate
+//!   entirely using the pointer values themselves, so passing null pointers
+//!   won't cause a segmentation fault). This safety cannot be guaranteed, as
+//!   future changes to Rust or additional [`IntoMutSliceLikePtr`]
+//!   implementations may need to read the data; in particular, [`CStr`] may
+//!   be changed at some point to no longer compute and store the length as
+//!   part of a fat pointer when created, so its
+//!   [`into_mut_slice_like_ptr()`][`IntoMutSliceLikePtr::into_mut_slice_like_ptr()`]
+//!   implementation would need to read the string itself in order to produce
+//!   a valid slice).
+//!
+//!   Adding `unsafe` is potentially a breaking change for anyone currently
+//!   using the [`IntoMutSliceLikePtr`] trait directly in their code, so this
+//!   will not be addressed until the 2.0 release of this crate.
+//!
+//!   This is only a safety issue that does not affect crate functionality or
+//!   any code that does not use the [`IntoMutSliceLikePtr`] trait directly,
+//!   so it can largely be ignored.
+//!
 //! # Example - Temporary Thread-local Allocations
 //!
 //! Applications can create per-thread scratchpads for temporary allocations
@@ -614,12 +638,15 @@
 //! [`cache_aligned_zeroed_for_markers!()`]: macro.cache_aligned_zeroed_for_markers.html
 //! [`CACHE_ALIGNMENT`]: constant.CACHE_ALIGNMENT.html
 //! [`CacheAligned`]: struct.CacheAligned.html
+//! [`CStr`]: https://doc.rust-lang.org/std/ffi/struct.CStr.html
 //! [`Deref`]: https://doc.rust-lang.org/std/ops/trait.Deref.html
 //! [`DerefMut`]: https://doc.rust-lang.org/std/ops/trait.DerefMut.html
 //! [`Drop`]: https://doc.rust-lang.org/std/ops/trait.Drop.html
 //! [`extend()`]: trait.Marker.html#method.extend
 //! [`extend_clone()`]: trait.Marker.html#method.extend_clone
 //! [`extend_copy()`]: trait.Marker.html#method.extend_copy
+//! [`IntoMutSliceLikePtr`]: trait.IntoMutSliceLikePtr.html
+//! [`IntoMutSliceLikePtr::into_mut_slice_like_ptr()`]: trait.IntoMutSliceLikePtr.html#tymethod.into_mut_slice_like_ptr
 //! [`Marker`]: trait.Marker.html
 //! [`Marker::concat_slices()`]: trait.Marker.html#method.concat_slices
 //! [`Marker::concat_slices_clone()`]: trait.Marker.html#method.concat_slices_clone
