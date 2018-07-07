@@ -680,7 +680,10 @@
 //! [`Vec`]: https://doc.rust-lang.org/std/vec/index.html
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(all(feature = "unstable", not(feature = "std")), feature(alloc))]
+#![cfg_attr(
+    all(feature = "unstable", not(feature = "std")),
+    feature(alloc)
+)]
 #![cfg_attr(feature = "unstable", feature(const_fn))]
 
 #[cfg(all(feature = "unstable", not(feature = "std")))]
