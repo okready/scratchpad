@@ -31,7 +31,6 @@
 //!   - [Memory Overhead](#memory-overhead)
 //!   - [Limitations](#limitations)
 //!   - [Mutability Notes](#mutability-notes)
-//! - [Known Issues](#known-issues)
 //! - [Example - Temporary Thread-local Allocations](#example---temporary-thread-local-allocations)
 //!
 //! # Overview
@@ -485,29 +484,6 @@
 //! otherwise prevent such behavior. Allocation and free operations do not
 //! have any side effect on other existing allocations, so there are no
 //! special considerations necessary by the user.
-//!
-//! # Known Issues
-//!
-//! - [`IntoMutSliceLikePtr::into_mut_slice_like_ptr()`] is not declared as
-//!   `unsafe`, as the implementations included by this crate don't need to
-//!   read the data pointed to by pointer given at this time (they can operate
-//!   entirely using the pointer values themselves, so passing null pointers
-//!   won't cause a segmentation fault). This safety cannot be guaranteed, as
-//!   future changes to Rust or additional [`IntoMutSliceLikePtr`]
-//!   implementations may need to read the data; in particular, [`CStr`] may
-//!   be changed at some point to no longer compute and store the length as
-//!   part of a fat pointer when created, so its
-//!   [`into_mut_slice_like_ptr()`][`IntoMutSliceLikePtr::into_mut_slice_like_ptr()`]
-//!   implementation would need to read the string itself in order to produce
-//!   a valid slice).
-//!
-//!   Adding `unsafe` is potentially a breaking change for anyone currently
-//!   using the [`IntoMutSliceLikePtr`] trait directly in their code, so this
-//!   will not be addressed until the 2.0 release of this crate.
-//!
-//!   This is only a safety issue that does not affect crate functionality or
-//!   any code that does not use the [`IntoMutSliceLikePtr`] trait directly,
-//!   so it can largely be ignored.
 //!
 //! # Example - Temporary Thread-local Allocations
 //!

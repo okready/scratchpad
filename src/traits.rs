@@ -704,6 +704,12 @@ where
     /// Reinterprets a mutable pointer of this type as a [`SliceLike`]
     /// pointer.
     ///
+    /// # Safety
+    ///
+    /// This function is unsafe as it handles raw pointer values and may
+    /// require reading from the given pointer. Passing a null or otherwise
+    /// invalid pointer can result in undefined behavior or crashes.
+    ///
     /// # Examples
     ///
     /// ```
@@ -712,23 +718,22 @@ where
     /// let mut value = 3.14159;
     /// let value_ptr: *mut f64 = &mut value;
     ///
-    /// let slice_ptr = IntoMutSliceLikePtr::into_mut_slice_like_ptr(
-    ///     value_ptr,
-    /// );
-    /// assert_eq!(unsafe { &*slice_ptr }, [3.14159]);
+    /// unsafe {
+    ///     let slice_ptr = IntoMutSliceLikePtr::into_mut_slice_like_ptr(
+    ///         value_ptr,
+    ///     );
+    ///     assert_eq!(&*slice_ptr, [3.14159]);
+    /// }
     /// ```
     ///
     /// [`SliceLike`]: trait.SliceLike.html
-    fn into_mut_slice_like_ptr(ptr: *mut Self) -> *mut T;
+    unsafe fn into_mut_slice_like_ptr(ptr: *mut Self) -> *mut T;
 }
 
 unsafe impl<T> IntoMutSliceLikePtr<[T]> for T {
-    // `ptr` doesn't get dereferenced by `slice::from_raw_parts_mut()`, so the
-    // lint error can be ignored.
-    #[allow(unknown_lints, not_unsafe_ptr_arg_deref)]
     #[inline]
-    fn into_mut_slice_like_ptr(ptr: *mut T) -> *mut [T] {
-        unsafe { slice::from_raw_parts_mut(ptr, 1) }
+    unsafe fn into_mut_slice_like_ptr(ptr: *mut T) -> *mut [T] {
+        slice::from_raw_parts_mut(ptr, 1)
     }
 }
 
@@ -737,34 +742,23 @@ where
     T: SliceLike + ?Sized,
 {
     #[inline]
-    fn into_mut_slice_like_ptr(ptr: *mut T) -> *mut T {
+    unsafe fn into_mut_slice_like_ptr(ptr: *mut T) -> *mut T {
         ptr
     }
 }
 
 unsafe impl IntoMutSliceLikePtr<[u8]> for str {
-    // Despite the notation, `ptr` doesn't actually get dereferenced by this
-    // function (only the pointer value itself is ever read), so the lint
-    // error can be ignored.
-    #[allow(unknown_lints, not_unsafe_ptr_arg_deref)]
     #[inline]
-    fn into_mut_slice_like_ptr(ptr: *mut str) -> *mut [u8] {
-        unsafe { (*ptr).as_bytes_mut() }
+    unsafe fn into_mut_slice_like_ptr(ptr: *mut str) -> *mut [u8] {
+        (*ptr).as_bytes_mut()
     }
 }
 
 #[cfg(feature = "std")]
 unsafe impl IntoMutSliceLikePtr<[u8]> for CStr {
-    // TODO: While the current implementation of `CStr` doesn't require
-    //       dereferencing `ptr` in order to convert to a `*mut [u8]`, it may
-    //       in the future, so the `not_unsafe_ptr_arg_deref` lint warning is
-    //       valid in this context. Since `IntoMutSliceLikePtr` is a public
-    //       trait, adding `unsafe` to this function would be a breaking
-    //       change, so we can't do so until the 2.0 release.
-    #[allow(unknown_lints, not_unsafe_ptr_arg_deref)]
     #[inline]
-    fn into_mut_slice_like_ptr(ptr: *mut CStr) -> *mut [u8] {
-        unsafe { (*ptr).as_element_slice_mut() }
+    unsafe fn into_mut_slice_like_ptr(ptr: *mut CStr) -> *mut [u8] {
+        (*ptr).as_element_slice_mut()
     }
 }
 
@@ -1415,13 +1409,11 @@ macro_rules! generate_array_trait_impls {
         }
 
         unsafe impl<T> IntoMutSliceLikePtr<[T]> for [T; $size] {
-            // Despite the notation, `ptr` doesn't actually get dereferenced
-            // by this function (only the pointer value itself is ever read),
-            // so the lint error can be ignored.
-            #[allow(unknown_lints, not_unsafe_ptr_arg_deref)]
             #[inline]
-            fn into_mut_slice_like_ptr(ptr: *mut [T; $size]) -> *mut [T] {
-                unsafe { &mut (*ptr)[..] }
+            unsafe fn into_mut_slice_like_ptr(
+                ptr: *mut [T; $size],
+            ) -> *mut [T] {
+                &mut (*ptr)[..]
             }
         }
     };

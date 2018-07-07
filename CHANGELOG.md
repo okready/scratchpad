@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   elements), and use normal (aligned) reads and writes in the associated
   `Tracking::get()` and `Tracking::set()` implementations, avoiding the
   performance penalties associated with supporting unaligned reads and writes.
+- Declare the `IntoMutSliceLikePtr::into_mut_slice_like_ptr()` trait method as
+  `unsafe` to indicate that it may read from the given pointer.
 
 ## [1.2.0] - 2018-07-07
 ### Added
