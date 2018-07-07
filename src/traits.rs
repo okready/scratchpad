@@ -631,6 +631,8 @@ where
     /// );
     /// assert_eq!(unsafe { &*slice_ptr }, [3.14159]);
     /// ```
+    ///
+    /// [`SliceLike`]: trait.SliceLike.html
     fn into_mut_slice_like_ptr(ptr: *mut Self) -> *mut T;
 }
 
