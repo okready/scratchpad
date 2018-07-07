@@ -8,9 +8,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Added
 - `CStr` allocation support, including conversion of `CStr` allocations to
   `[u8]` allocations.
-- `Allocation` now implements
-  [`StableDeref`](https://crates.io/crates/stable_deref_trait), allowing
-  allocations to be used with other crates that support the trait such as
+- Implementation of
+  [`StableDeref`](https://crates.io/crates/stable_deref_trait) for
+  `Allocation`, allowing allocations to be used with other crates that support
+  the trait such as
   [`owning_ref`](https://crates.io/crates/owning_ref) and
   [`rental`](https://crates.io/crates/rental).
 
