@@ -20,6 +20,20 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   `Tracking::get()` and `Tracking::set()` implementations, avoiding the
   performance penalties associated with supporting unaligned reads and writes.
 
+## [1.2.0] - 2018-07-07
+### Added
+- `CStr` allocation support, including conversion of `CStr` allocations to
+  `[u8]` allocations.
+- Implementation of
+  [`StableDeref`](https://crates.io/crates/stable_deref_trait) for
+  `Allocation`, allowing allocations to be used with other crates that support
+  the trait such as
+  [`owning_ref`](https://crates.io/crates/owning_ref) and
+  [`rental`](https://crates.io/crates/rental).
+
+### Fixed
+- Minor documentation fixes.
+
 ## [1.1.0] - 2018-06-16
 ### Added
 - `Scratchpad::static_new_in_place()` for initializing a `Scratchpad` within
@@ -191,7 +205,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Added
 - Initial release.
 
-[Unreleased]: https://github.com/okready/scratchpad/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/okready/scratchpad/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/okready/scratchpad/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/okready/scratchpad/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/okready/scratchpad/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/okready/scratchpad/compare/v1.0.0-beta.2...v1.0.0

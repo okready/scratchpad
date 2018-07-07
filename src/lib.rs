@@ -31,6 +31,7 @@
 //!   - [Memory Overhead](#memory-overhead)
 //!   - [Limitations](#limitations)
 //!   - [Mutability Notes](#mutability-notes)
+//! - [Known Issues](#known-issues)
 //! - [Example - Temporary Thread-local Allocations](#example---temporary-thread-local-allocations)
 //!
 //! # Overview
@@ -168,7 +169,9 @@
 //! either explicitly using the unary `*` operator (e.g. `*allocation`) or
 //! implicitly, such as when calling methods provided by the allocated data
 //! type (e.g. `allocation.len()` for retrieving the number of elements in an
-//! `Allocation<[i32]>`).
+//! `Allocation<[i32]>`). Allocations also implement [`StableDeref`], allowing
+//! them to be used with crates that support the trait such as [`owning_ref`]
+//! and [`rental`].
 //!
 //! ```
 //! # use scratchpad::Scratchpad;
@@ -483,6 +486,29 @@
 //! have any side effect on other existing allocations, so there are no
 //! special considerations necessary by the user.
 //!
+//! # Known Issues
+//!
+//! - [`IntoMutSliceLikePtr::into_mut_slice_like_ptr()`] is not declared as
+//!   `unsafe`, as the implementations included by this crate don't need to
+//!   read the data pointed to by pointer given at this time (they can operate
+//!   entirely using the pointer values themselves, so passing null pointers
+//!   won't cause a segmentation fault). This safety cannot be guaranteed, as
+//!   future changes to Rust or additional [`IntoMutSliceLikePtr`]
+//!   implementations may need to read the data; in particular, [`CStr`] may
+//!   be changed at some point to no longer compute and store the length as
+//!   part of a fat pointer when created, so its
+//!   [`into_mut_slice_like_ptr()`][`IntoMutSliceLikePtr::into_mut_slice_like_ptr()`]
+//!   implementation would need to read the string itself in order to produce
+//!   a valid slice).
+//!
+//!   Adding `unsafe` is potentially a breaking change for anyone currently
+//!   using the [`IntoMutSliceLikePtr`] trait directly in their code, so this
+//!   will not be addressed until the 2.0 release of this crate.
+//!
+//!   This is only a safety issue that does not affect crate functionality or
+//!   any code that does not use the [`IntoMutSliceLikePtr`] trait directly,
+//!   so it can largely be ignored.
+//!
 //! # Example - Temporary Thread-local Allocations
 //!
 //! Applications can create per-thread scratchpads for temporary allocations
@@ -634,12 +660,15 @@
 //! [`cache_aligned_zeroed_for_markers!()`]: macro.cache_aligned_zeroed_for_markers.html
 //! [`CACHE_ALIGNMENT`]: constant.CACHE_ALIGNMENT.html
 //! [`CacheAligned`]: struct.CacheAligned.html
+//! [`CStr`]: https://doc.rust-lang.org/std/ffi/struct.CStr.html
 //! [`Deref`]: https://doc.rust-lang.org/std/ops/trait.Deref.html
 //! [`DerefMut`]: https://doc.rust-lang.org/std/ops/trait.DerefMut.html
 //! [`Drop`]: https://doc.rust-lang.org/std/ops/trait.Drop.html
 //! [`extend()`]: trait.Marker.html#method.extend
 //! [`extend_clone()`]: trait.Marker.html#method.extend_clone
 //! [`extend_copy()`]: trait.Marker.html#method.extend_copy
+//! [`IntoMutSliceLikePtr`]: trait.IntoMutSliceLikePtr.html
+//! [`IntoMutSliceLikePtr::into_mut_slice_like_ptr()`]: trait.IntoMutSliceLikePtr.html#tymethod.into_mut_slice_like_ptr
 //! [`liballoc`]: https://doc.rust-lang.org/alloc/
 //! [`libstd`]: https://doc.rust-lang.org/std/
 //! [`Marker`]: trait.Marker.html
@@ -654,8 +683,10 @@
 //! [`MarkerFront::append()`]: struct.MarkerFront.html#method.append
 //! [`MarkerFront::append_clone()`]: struct.MarkerFront.html#method.append_clone
 //! [`MarkerFront::append_copy()`]: struct.MarkerFront.html#method.append_copy
+//! [`owning_ref`]: https://crates.io/crates/owning_ref
 //! [`ptr::read_unaligned()`]: https://doc.rust-lang.org/std/ptr/fn.read_unaligned.html
 //! [`ptr::write_unaligned()`]: https://doc.rust-lang.org/std/ptr/fn.write_unaligned.html
+//! [`rental`]: https://crates.io/crates/rental
 //! [`Scratchpad`]: struct.Scratchpad.html
 //! [`Scratchpad::mark_back()`]: struct.Scratchpad.html#method.mark_back
 //! [`Scratchpad::mark_front()`]: struct.Scratchpad.html#method.mark_front
@@ -666,6 +697,7 @@
 //! [`SliceSource`]: trait.SliceSource.html
 //! [`SliceSourceCollection`]: trait.SliceSourceCollection.html
 //! [`SliceMoveSourceCollection`]: trait.SliceMoveSourceCollection.html
+//! [`StableDeref`]: https://crates.io/crates/stable_deref_trait
 //! [`Tracking`]: trait.Tracking.html
 //! [`uninitialized_boxed_slice()`]: fn.uninitialized_boxed_slice.html
 //! [`uninitialized_boxed_slice_for_bytes()`]: fn.uninitialized_boxed_slice_for_bytes.html
@@ -680,6 +712,8 @@
 extern crate alloc;
 #[cfg(feature = "std")]
 extern crate core;
+
+extern crate stable_deref_trait;
 
 #[cfg(test)]
 extern crate arrayvec;

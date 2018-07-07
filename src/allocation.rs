@@ -19,12 +19,15 @@ use core::marker::PhantomData;
 use core::mem::forget;
 use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
+use stable_deref_trait::StableDeref;
 
 /// Scratchpad [`Marker`] allocation.
 ///
-/// Markers implement the [`Deref`] and [`DerefMut`] traits, allowing the data
-/// to be dereferenced explicitly using the unary `*` operator (e.g.
+/// Allocations implement the [`Deref`] and [`DerefMut`] traits, allowing the
+/// data to be dereferenced explicitly using the unary `*` operator (e.g.
 /// `*allocation`) or implicitly by the compiler under various circumstances.
+/// Allocations also implement [`StableDeref`], allowing them to be used with
+/// crates that support the trait such as [`owning_ref`] and [`rental`].
 ///
 /// An allocation is statically bound to the lifetime of the [`Marker`] from
 /// which it is allocated, ensuring that no dangling references can be left
@@ -33,6 +36,9 @@ use core::ptr::NonNull;
 /// [`Marker`]: trait.Marker.html
 /// [`Deref`]: https://doc.rust-lang.org/std/ops/trait.Deref.html
 /// [`DerefMut`]: https://doc.rust-lang.org/std/ops/trait.DerefMut.html
+/// [`StableDeref`]: https://crates.io/crates/stable_deref_trait
+/// [`owning_ref`]: https://crates.io/crates/owning_ref
+/// [`rental`]: https://crates.io/crates/rental
 pub struct Allocation<'marker, T>
 where
     T: ?Sized,
@@ -333,6 +339,8 @@ where
         unsafe { self.data.as_mut() }
     }
 }
+
+unsafe impl<'marker, T> StableDeref for Allocation<'marker, T> {}
 
 impl<'marker, T> Drop for Allocation<'marker, T>
 where

@@ -28,6 +28,9 @@ alloc = []
 # Allow miscellaneous unstable features. Requires a nightly toolchain.
 unstable = []
 
+[dependencies]
+stable_deref_trait = { version = "1.0", default-features = false }
+
 [build-dependencies]
 rustc_version = "0.2"
 
