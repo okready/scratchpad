@@ -683,6 +683,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(all(feature = "alloc", not(feature = "std")), feature(alloc))]
 #![cfg_attr(feature = "unstable", feature(const_fn))]
+// LINT: Disabling `ptr_offset_with_cast` warning since using the pointer
+//       `add` method would break Rust 1.25 compatibility (`add` was not
+//       introduced until 1.26). As of Rust 1.32.0, `add` simply calls
+//       `offset` with a cast anyway, so they are functionally equivalent.
+#![cfg_attr(feature = "cargo-clippy", allow(clippy::ptr_offset_with_cast))]
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
 extern crate alloc;

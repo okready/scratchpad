@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [Unreleased (2.0.0)]
 ### Added
 - `SizeAlignedByteData` trait for `ByteData` types that are guaranteed to
   provide proper alignment for storage of `usize` and `isize` values.
@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   performance penalties associated with supporting unaligned reads and writes.
 - Declare the `IntoMutSliceLikePtr::into_mut_slice_like_ptr()` trait method as
   `unsafe` to indicate that it may read from the given pointer.
+
+## [Unreleased (1.x)]
+### Changed
+- Updated Travis CI configuration to use `clippy` and `rustfmt` from the
+  stable toolchain, and updated the code accordingly (based on the 1.32.0
+  toolchain versions).
+- Minor API documentation improvements.
 
 ## [1.2.0] - 2018-07-07
 ### Added
@@ -207,7 +214,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Added
 - Initial release.
 
-[Unreleased]: https://github.com/okready/scratchpad/compare/v1.2.0...HEAD
+[Unreleased (2.0.0)]: https://github.com/okready/scratchpad/compare/HEAD...2.0-dev
+[Unreleased (1.x)]: https://github.com/okready/scratchpad/compare/v1.2.0...HEAD
 [1.2.0]: https://github.com/okready/scratchpad/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/okready/scratchpad/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/okready/scratchpad/compare/v1.0.0...v1.0.1

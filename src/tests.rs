@@ -134,7 +134,9 @@ fn validate_basic_operations<'scratchpad, MF, CF, M>(
     conv: CF,
 ) where
     MF: Fn(&'scratchpad SimpleScratchpad) -> Result<M, Error<()>>,
-    CF: for<'a> Fn(&'a [usize])
+    CF: for<'a> Fn(
+        &'a [usize],
+    )
         -> (ArrayVec<SimpleTracking>, ArrayVec<SimpleTracking>),
     M: MarkerInternal + fmt::Debug,
 {

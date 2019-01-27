@@ -103,7 +103,8 @@ pub trait Marker {
     unsafe fn allocate_uninitialized<'marker, T>(
         &'marker self,
     ) -> Result<Allocation<'marker, T>, Error<()>> {
-        let data = self.allocate_memory(align_of::<T>(), size_of::<T>(), 1)?;
+        let data =
+            self.allocate_memory(align_of::<T>(), size_of::<T>(), 1)?;
 
         Ok(Allocation {
             data: NonNull::new(data as *mut T).unwrap(),
@@ -248,7 +249,8 @@ pub trait Marker {
             data: NonNull::new(slice::from_raw_parts_mut(
                 data as *mut T,
                 len,
-            )).unwrap(),
+            ))
+            .unwrap(),
             _phantom: PhantomData,
         })
     }
