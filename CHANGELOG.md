@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Updated Travis CI configuration to use `clippy` and `rustfmt` from the
   stable toolchain, and updated the code accordingly (based on the 1.32.0
   toolchain versions).
+- Minor API documentation improvements.
 
 ## [1.2.0] - 2018-07-07
 ### Added

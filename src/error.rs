@@ -38,11 +38,13 @@ pub enum ErrorKind {
 /// The error type for scratchpad operations.
 ///
 /// Various scratchpad operations require ownership of some or all of their
-/// parameters to the callee, such as for storage in a new allocation. If such
-/// operations fail, the caller may still want to do something with the data
-/// originally provided. This type encapsulates both the kind of error that
-/// occurred and any "owned" parameters that were passed so that the caller
-/// can have them back.
+/// parameters to be transferred to the callee, such as for storage in a new
+/// allocation. If such operations fail, the caller may still want to do
+/// something with the data originally provided.
+///
+/// This type encapsulates both the kind of error that occurred and any
+/// recoverable "owned" parameters that were passed so that the caller can
+/// have them back.
 #[derive(Debug)]
 pub struct Error<T> {
     /// "Owned" arguments passed to the function.
