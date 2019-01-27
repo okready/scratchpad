@@ -217,7 +217,7 @@ where
     /// ```
     ///
     /// [`MarkerBack`]: struct.MarkerBack.html
-    #[allow(unknown_lints, type_complexity)] // Result type lint warning.
+    #[cfg_attr(feature = "cargo-clippy", allow(clippy::type_complexity))] // LINT: Result type lint warning.
     pub fn concat<U, V>(
         self,
         other: Allocation<'marker, V>,
@@ -312,7 +312,8 @@ where
                     data0.as_mut_ptr(),
                     data0.len() + data1.len(),
                 ),
-            )).unwrap(),
+            ))
+            .unwrap(),
             _phantom: PhantomData,
         }
     }

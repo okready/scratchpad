@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Changed
+- Updated Travis CI configuration to use `clippy` and `rustfmt` from the
+  stable toolchain, and updated the code accordingly (based on the 1.32.0
+  toolchain versions).
 
 ## [1.2.0] - 2018-07-07
 ### Added

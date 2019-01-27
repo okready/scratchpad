@@ -201,7 +201,8 @@ unsafe impl<T> StaticBuffer for T
 where
     T: Array,
     <T as Array>::Item: ByteData,
-{}
+{
+}
 
 /// Trait for [`Scratchpad`] allocation tracking containers.
 ///
@@ -237,7 +238,7 @@ where
         self.as_bytes().len() / size_of::<usize>()
     }
 
-    #[allow(unknown_lints, cast_ptr_alignment)]
+    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
     #[inline]
     fn set(&mut self, index: usize, value: usize) {
         let bytes = self.as_bytes_mut();
@@ -250,7 +251,7 @@ where
         }
     }
 
-    #[allow(unknown_lints, cast_ptr_alignment)]
+    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
     #[inline]
     fn get(&self, index: usize) -> usize {
         let bytes = self.as_bytes();
@@ -637,9 +638,12 @@ where
 }
 
 unsafe impl<T> IntoMutSliceLikePtr<[T]> for T {
-    // `ptr` doesn't get dereferenced by `slice::from_raw_parts_mut()`, so the
-    // lint error can be ignored.
-    #[allow(unknown_lints, not_unsafe_ptr_arg_deref)]
+    // LINT: `ptr` doesn't get dereferenced by `slice::from_raw_parts_mut()`,
+    //       so the lint error can be ignored.
+    #[cfg_attr(
+        feature = "cargo-clippy",
+        allow(clippy::not_unsafe_ptr_arg_deref)
+    )]
     #[inline]
     fn into_mut_slice_like_ptr(ptr: *mut T) -> *mut [T] {
         unsafe { slice::from_raw_parts_mut(ptr, 1) }
@@ -657,10 +661,13 @@ where
 }
 
 unsafe impl IntoMutSliceLikePtr<[u8]> for str {
-    // Despite the notation, `ptr` doesn't actually get dereferenced by this
-    // function (only the pointer value itself is ever read), so the lint
-    // error can be ignored.
-    #[allow(unknown_lints, not_unsafe_ptr_arg_deref)]
+    // LINT: Despite the notation, `ptr` doesn't actually get dereferenced by
+    //       this function (only the pointer value itself is ever read), so
+    //       the lint error can be ignored.
+    #[cfg_attr(
+        feature = "cargo-clippy",
+        allow(clippy::not_unsafe_ptr_arg_deref)
+    )]
     #[inline]
     fn into_mut_slice_like_ptr(ptr: *mut str) -> *mut [u8] {
         unsafe { (*ptr).as_bytes_mut() }
@@ -675,7 +682,10 @@ unsafe impl IntoMutSliceLikePtr<[u8]> for CStr {
     //       valid in this context. Since `IntoMutSliceLikePtr` is a public
     //       trait, adding `unsafe` to this function would be a breaking
     //       change, so we can't do so until the 2.0 release.
-    #[allow(unknown_lints, not_unsafe_ptr_arg_deref)]
+    #[cfg_attr(
+        feature = "cargo-clippy",
+        allow(clippy::not_unsafe_ptr_arg_deref)
+    )]
     #[inline]
     fn into_mut_slice_like_ptr(ptr: *mut CStr) -> *mut [u8] {
         unsafe { (*ptr).as_element_slice_mut() }
@@ -1329,10 +1339,10 @@ macro_rules! generate_array_trait_impls {
         }
 
         unsafe impl<T> IntoMutSliceLikePtr<[T]> for [T; $size] {
-            // Despite the notation, `ptr` doesn't actually get dereferenced
-            // by this function (only the pointer value itself is ever read),
-            // so the lint error can be ignored.
-            #[allow(unknown_lints, not_unsafe_ptr_arg_deref)]
+            // LINT: Despite the notation, `ptr` doesn't actually get
+            //       dereferenced by this function (only the pointer value
+            //       itself is ever read), so the lint error can be ignored.
+            #[cfg_attr(feature = "cargo-clippy", allow(clippy::not_unsafe_ptr_arg_deref))]
             #[inline]
             fn into_mut_slice_like_ptr(ptr: *mut [T; $size]) -> *mut [T] {
                 unsafe { &mut (*ptr)[..] }

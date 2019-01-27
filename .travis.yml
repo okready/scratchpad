@@ -15,17 +15,17 @@ env:
 matrix:
   include:
   # `rustfmt` verification.
-  - rust: nightly
+  - rust: stable
     before_script:
-    - rustup component add rustfmt-preview
+    - rustup component add rustfmt
     script:
     - cargo fmt -- --check
   # `clippy` lint tests.
-  - rust: nightly
+  - rust: stable
+    before_script:
+    - rustup component add clippy
     script:
-    # `clippy` may fail to build with certain nightly toolchain releases, so
-    # ignore lint tests if this happens.
-    - if cargo install clippy; then cargo clippy; fi
+    - cargo clippy -- -Dwarnings
   - rust: nightly
     env: FEATURE_ARGS="--features unstable"
   - rust: nightly

@@ -296,6 +296,16 @@ impl fmt::Debug for CacheAligned {
 /// ```
 ///
 /// [undefined behavior]: https://doc.rust-lang.org/reference/behavior-considered-undefined.html
+// LINT: The `unsafe_vector_initialization` lint recommends replacing
+//       `with_capacity/set_len` use with allocation of a zeroed-out vector,
+//       which can have a non-negligible impact on performance and is not a
+//       suitable replacement. This has been acknowledged, and in upcoming
+//       versions of `clippy`, the lint has been deprecated (although it is
+//       still present in the current stable version).
+#[cfg_attr(
+    feature = "cargo-clippy",
+    allow(clippy::unsafe_vector_initialization)
+)]
 #[cfg(any(feature = "std", feature = "unstable"))]
 #[inline]
 pub unsafe fn uninitialized_boxed_slice<T>(len: usize) -> Box<[T]>
