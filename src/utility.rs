@@ -27,7 +27,7 @@ use super::{Box, ByteData, Vec};
 /// assert_eq!(array_len_for_bytes!(u64, 32), 4);
 /// # }
 /// ```
-#[macro_export]
+#[macro_export(local_inner_macros)]
 macro_rules! array_len_for_bytes {
     ($element:ty, $bytes:expr) => {
         ($bytes + $crate::size_of::<$element>() - 1)
@@ -56,7 +56,7 @@ macro_rules! array_len_for_bytes {
 /// let buffer: BufferType = [1, 2, 3, 4];
 /// # }
 /// ```
-#[macro_export]
+#[macro_export(local_inner_macros)]
 macro_rules! array_type_for_bytes {
     ($element:ty, $bytes:expr) => {
         [$element; array_len_for_bytes!($element, $bytes)]
@@ -91,7 +91,7 @@ macro_rules! array_type_for_bytes {
 /// ```
 ///
 /// [allocation markers]: trait.Marker.html
-#[macro_export]
+#[macro_export(local_inner_macros)]
 macro_rules! array_len_for_markers {
     ($element:ty, $marker_count:expr) => {
         array_len_for_bytes!(
@@ -144,7 +144,7 @@ macro_rules! array_len_for_markers {
 /// ```
 ///
 /// [allocation markers]: trait.Marker.html
-#[macro_export]
+#[macro_export(local_inner_macros)]
 macro_rules! array_type_for_markers {
     ($element:ty, $marker_count:expr) => {
         [$element; array_len_for_markers!($element, $marker_count)]
@@ -198,7 +198,7 @@ macro_rules! cache_aligned_zeroed {
 /// ```
 ///
 /// [`CacheAligned`]: struct.CacheAligned.html
-#[macro_export]
+#[macro_export(local_inner_macros)]
 macro_rules! cache_aligned_zeroed_for_bytes {
     ($bytes:expr) => {
         [cache_aligned_zeroed!();
@@ -230,7 +230,7 @@ macro_rules! cache_aligned_zeroed_for_bytes {
 ///
 /// [`CacheAligned`]: struct.CacheAligned.html
 /// [allocation markers]: trait.Marker.html
-#[macro_export]
+#[macro_export(local_inner_macros)]
 macro_rules! cache_aligned_zeroed_for_markers {
     ($marker_count:expr) => {
         [cache_aligned_zeroed!();

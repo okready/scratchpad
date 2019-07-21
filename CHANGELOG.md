@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 ### Changed
+- Add `local_inner_macros` modifier to utility macro declarations
+  (`array_type_for_bytes!`, `cache_aligned_zeroed_for_markers!`, etc.),
+  allowing them to be imported individually via `use` statements in Rust 2018
+  code without needing to import any other macros that they may call.
 - Updated Travis CI configuration to use `clippy` and `rustfmt` from the
   stable toolchain, and updated the code accordingly (based on the 1.36.0
   toolchain versions).

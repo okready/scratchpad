@@ -41,10 +41,10 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-scratchpad = "1.2"
+scratchpad = "1.3"
 ```
 
-and this to your crate root:
+For Rust 2015 code, also add this to your crate root:
 
 ```rust
 #[macro_use]
@@ -65,7 +65,7 @@ must be disabled in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-scratchpad = { version = "1.2", default-features = false }
+scratchpad = { version = "1.3", default-features = false }
 ```
 
 `Box` and `Vec` support is still available for `no_std` builds when using a
@@ -88,5 +88,5 @@ Simply add the `unstable` feature to your `Cargo.toml` dependency:
 
 ```toml
 [dependencies]
-scratchpad = { version = "1.2", features = ["unstable"] }
+scratchpad = { version = "1.3", features = ["unstable"] }
 ```
