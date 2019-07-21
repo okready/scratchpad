@@ -13,6 +13,8 @@ use core::slice;
 use core::str;
 
 use super::CacheAligned;
+#[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+use core::mem::MaybeUninit;
 use core::mem::{forget, size_of};
 
 #[cfg(feature = "std")]
@@ -67,6 +69,9 @@ unsafe impl ByteData for i64 {}
 unsafe impl ByteData for i128 {}
 unsafe impl ByteData for isize {}
 unsafe impl ByteData for CacheAligned {}
+
+#[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+unsafe impl<T: ByteData> ByteData for MaybeUninit<T> {}
 
 /// Trait for static arrays.
 ///

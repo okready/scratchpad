@@ -83,6 +83,11 @@ a nightly toolchain:
 - `ByteData` trait implementations for `u128`/`i128` for Rust versions prior
   to 1.26 (`u128`/`i128` support is enabled by default with both stable and
   unstable toolchains if the detected Rust version is 1.26 or greater).
+- `ByteData` trait implementation for all `std::mem::MaybeUninit` types
+  wrapping other `ByteData` types (e.g. `MaybeUninit<usize>`) for Rust
+  versions prior to 1.36 (`MaybeUninit` support is enabled by default with
+  both stable and unstable toolchains if the detected Rust version is 1.36 or
+  greater).
 
 Simply add the `unstable` feature to your `Cargo.toml` dependency:
 

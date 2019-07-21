@@ -5,15 +5,30 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- `ByteData` support for `std::mem::MaybeUninit` types that wrap other
+  `ByteData` types (e.g. `MaybeUninit<usize>`) when using Rust 1.36 or later
+  or when the `unstable` feature is enabled.
+
 ### Changed
 - Add `local_inner_macros` modifier to utility macro declarations
   (`array_type_for_bytes!`, `cache_aligned_zeroed_for_markers!`, etc.),
   allowing them to be imported individually via `use` statements in Rust 2018
   code without needing to import any other macros that they may call.
+- Update example and test code to use `std::mem::MaybeUninit` as appropriate
+  when working with uninitialized memory. The now-deprecated
+  `std::mem::uninitialized()` function is only used for tests on legacy
+  systems and is not included in any generated documentation.
+- Include recommendations to use arrays and slices of `std::mem::MaybeUninit`
+  elements if possible for uninitialized memory storage to the documentation
+  for `Scratchpad::static_new()`, `Scratchpad::static_new_in_place()`,
+  `uninitialized_boxed_slice()`, `uninitialized_boxed_slice_for_bytes()`, and
+  `uninitialized_boxed_slice_for_markers()`, as well as a note in the "Known
+  Issues" section of the crate-level documentation.
 - Updated Travis CI configuration to use `clippy` and `rustfmt` from the
   stable toolchain, and updated the code accordingly (based on the 1.36.0
   toolchain versions).
-- Minor API documentation improvements.
+- Various minor API documentation improvements.
 
 ## [1.2.0] - 2018-07-07
 ### Added

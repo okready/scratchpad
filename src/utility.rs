@@ -286,12 +286,23 @@ impl fmt::Debug for CacheAligned {
 /// writing to the slice contents can trigger [undefined behavior] if not
 /// careful.
 ///
+/// It is strongly recommended to only allocate slices of
+/// [`MaybeUninit`]-wrapped types if supported by the version of Rust used, as
+/// using slices of non-wrapped types cause undefined behavior. This function
+/// will most likely be updated to enforce this restriction in future major
+/// releases of this crate.
+///
 /// # Examples
 ///
 /// ```
 /// use scratchpad::uninitialized_boxed_slice;
+/// # #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+/// use std::mem::MaybeUninit;
 ///
-/// let buffer = unsafe { uninitialized_boxed_slice::<u32>(32) };
+/// # #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+/// # let buffer = unsafe { uninitialized_boxed_slice::<u32>(32) };
+/// # #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+/// let buffer = unsafe { uninitialized_boxed_slice::<MaybeUninit<u32>>(32) };
 /// assert_eq!(buffer.len(), 32);
 /// ```
 ///
@@ -316,12 +327,25 @@ where
 /// writing to the slice contents can trigger [undefined behavior] if not
 /// careful.
 ///
+/// It is strongly recommended to only allocate slices of
+/// [`MaybeUninit`]-wrapped types if supported by the version of Rust used, as
+/// using slices of non-wrapped types cause undefined behavior. This function
+/// will most likely be updated to enforce this restriction in future major
+/// releases of this crate.
+///
 /// # Examples
 ///
 /// ```
 /// use scratchpad::uninitialized_boxed_slice_for_bytes;
+/// # #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+/// use std::mem::MaybeUninit;
 ///
-/// let buffer = unsafe { uninitialized_boxed_slice_for_bytes::<u32>(32) };
+/// # #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+/// # let buffer = unsafe { uninitialized_boxed_slice_for_bytes::<u32>(32) };
+/// # #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+/// let buffer = unsafe {
+///     uninitialized_boxed_slice_for_bytes::<MaybeUninit<u32>>(32)
+/// };
 /// assert_eq!(buffer.len(), 8);
 /// ```
 ///
@@ -344,13 +368,26 @@ where
 /// writing to the slice contents can trigger [undefined behavior] if not
 /// careful.
 ///
+/// It is strongly recommended to only allocate slices of
+/// [`MaybeUninit`]-wrapped types if supported by the version of Rust used, as
+/// using slices of non-wrapped types cause undefined behavior. This function
+/// will most likely be updated to enforce this restriction in future major
+/// releases of this crate.
+///
 /// # Examples
 ///
 /// ```
 /// use scratchpad::uninitialized_boxed_slice_for_markers;
+/// # #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+/// use std::mem::MaybeUninit;
 ///
+/// # #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+/// # let buffer = unsafe {
+/// #     uninitialized_boxed_slice_for_markers::<usize>(32)
+/// # };
+/// # #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
 /// let buffer = unsafe {
-///     uninitialized_boxed_slice_for_markers::<usize>(32)
+///     uninitialized_boxed_slice_for_markers::<MaybeUninit<usize>>(32)
 /// };
 /// assert_eq!(buffer.len(), 32);
 /// ```

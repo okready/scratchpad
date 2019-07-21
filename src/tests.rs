@@ -6,12 +6,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use core::fmt;
-
 use super::*;
 use arrayvec::ArrayVec;
 use core::cell::Cell;
-use core::mem::{align_of, uninitialized};
+use core::mem::align_of;
+#[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+use core::mem::uninitialized;
+#[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+use core::mem::MaybeUninit;
 
 #[cfg(any(feature = "std", feature = "unstable"))]
 use super::{Box, Vec};
@@ -119,12 +121,33 @@ const MAX_MARKERS: usize = 4;
 
 /// Scratchpad allocation buffer type for `validate_basic_operations()` (32
 /// bytes of allocated data).
+#[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+type SimpleBuffer = array_type_for_bytes!(MaybeUninit<u64>, BUFFER_SIZE);
+#[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
 type SimpleBuffer = array_type_for_bytes!(u64, BUFFER_SIZE);
+
 /// Scratchpad marker tracking buffer type for `validate_basic_operations()`
 /// (4 markers).
+#[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+type SimpleTracking =
+    array_type_for_markers!(MaybeUninit<usize>, MAX_MARKERS);
+#[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
 type SimpleTracking = array_type_for_markers!(usize, MAX_MARKERS);
+
 /// `Scratchpad` type for `validate_basic_operations()`.
 type SimpleScratchpad = Scratchpad<SimpleBuffer, SimpleTracking>;
+
+/// Unwraps the error returned from a scratchpad `mark` method, panicking if
+/// the `mark` method returned a valid marker.
+fn unwrap_mark_err<M>(result: Result<M, Error<()>>) -> Error<()>
+where
+    M: Marker,
+{
+    match result {
+        Ok(_) => panic!("expected error, but received marker"),
+        Err(err) => err,
+    }
+}
 
 /// Shared implementation for `validate_front_operations()` and
 /// `validate_back_operations()`.
@@ -136,9 +159,11 @@ fn validate_basic_operations<'scratchpad, MF, CF, M>(
     MF: Fn(&'scratchpad SimpleScratchpad) -> Result<M, Error<()>>,
     CF: for<'a> Fn(
         &'a [usize],
-    )
-        -> (ArrayVec<SimpleTracking>, ArrayVec<SimpleTracking>),
-    M: MarkerInternal + fmt::Debug,
+    ) -> (
+        ArrayVec<[usize; MAX_MARKERS]>,
+        ArrayVec<[usize; MAX_MARKERS]>,
+    ),
+    M: MarkerInternal,
 {
     // Rust should guarantee a default alignment of at least 8 bytes (for
     // allocations of 8 bytes or more), so verify our buffer is aligned as
@@ -251,7 +276,10 @@ fn validate_basic_operations<'scratchpad, MF, CF, M>(
 
     // Attempt to set another marker, which should fail due to reaching
     // our marker limit.
-    assert_eq!(mark(scratchpad).unwrap_err().kind(), ErrorKind::MarkerLimit);
+    assert_eq!(
+        unwrap_mark_err(mark(scratchpad)).kind(),
+        ErrorKind::MarkerLimit
+    );
 
     // Release marker `a` and re-attempt creation of a new marker. This should
     // still fail since the reservation for marker `a` cannot be reclaimed
@@ -268,7 +296,10 @@ fn validate_basic_operations<'scratchpad, MF, CF, M>(
             ][..],
         ),
     );
-    assert_eq!(mark(scratchpad).unwrap_err().kind(), ErrorKind::MarkerLimit);
+    assert_eq!(
+        unwrap_mark_err(mark(scratchpad)).kind(),
+        ErrorKind::MarkerLimit
+    );
 
     // Release marker `c`.
     drop(c);
@@ -316,6 +347,14 @@ fn validate_basic_operations<'scratchpad, MF, CF, M>(
 /// `Marker` match the expected state across various "front" operations.
 #[test]
 fn validate_front_operations() {
+    #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+    let scratchpad = unsafe {
+        Scratchpad::new(
+            MaybeUninit::<SimpleBuffer>::uninit().assume_init(),
+            MaybeUninit::<SimpleTracking>::uninit().assume_init(),
+        )
+    };
+    #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
     let scratchpad = unsafe {
         Scratchpad::new(
             uninitialized::<SimpleBuffer>(),
@@ -333,6 +372,14 @@ fn validate_front_operations() {
 /// `Marker` match the expected state across various "back" operations.
 #[test]
 fn validate_back_operations() {
+    #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+    let scratchpad = unsafe {
+        Scratchpad::new(
+            MaybeUninit::<SimpleBuffer>::uninit().assume_init(),
+            MaybeUninit::<SimpleTracking>::uninit().assume_init(),
+        )
+    };
+    #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
     let scratchpad = unsafe {
         Scratchpad::new(
             uninitialized::<SimpleBuffer>(),
@@ -364,10 +411,22 @@ fn validate_back_operations() {
 #[test]
 fn validate_front_operations_in_place() {
     unsafe {
+        #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+        let mut scratchpad = MaybeUninit::uninit();
+        #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+        SimpleScratchpad::static_new_in_place(scratchpad.as_mut_ptr());
+        #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+        let scratchpad_ref = &*scratchpad.as_ptr();
+
+        #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
         let mut scratchpad = uninitialized();
+        #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
         SimpleScratchpad::static_new_in_place(&mut scratchpad);
+        #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+        let scratchpad_ref = &scratchpad;
+
         validate_basic_operations(
-            &scratchpad,
+            scratchpad_ref,
             |scratchpad| scratchpad.mark_front(),
             |stack| (stack.iter().map(|x| *x).collect(), ArrayVec::new()),
         );
@@ -380,10 +439,22 @@ fn validate_front_operations_in_place() {
 #[test]
 fn validate_back_operations_in_place() {
     unsafe {
+        #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+        let mut scratchpad = MaybeUninit::uninit();
+        #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+        SimpleScratchpad::static_new_in_place(scratchpad.as_mut_ptr());
+        #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+        let scratchpad_ref = &*scratchpad.as_ptr();
+
+        #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
         let mut scratchpad = uninitialized();
+        #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
         SimpleScratchpad::static_new_in_place(&mut scratchpad);
+        #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+        let scratchpad_ref = &scratchpad;
+
         validate_basic_operations(
-            &scratchpad,
+            scratchpad_ref,
             |scratchpad| scratchpad.mark_back(),
             |stack| {
                 let flipped_stack = stack
@@ -411,8 +482,8 @@ fn validate_memory_limits<'scratchpad, MF, OF, M, O>(
 ) where
     MF: Fn(&'scratchpad SimpleScratchpad) -> Result<M, Error<()>>,
     OF: Fn(&'scratchpad SimpleScratchpad) -> Result<O, Error<()>>,
-    M: Marker + fmt::Debug,
-    O: Marker + fmt::Debug,
+    M: Marker,
+    O: Marker,
 {
     let test_allocation = |bytes_available| {
         let marker = mark(scratchpad).unwrap();
@@ -435,6 +506,14 @@ fn validate_memory_limits<'scratchpad, MF, OF, M, O>(
 /// scratchpad is correctly adjusted as allocations at the back increase.
 #[test]
 fn validate_front_memory_limits() {
+    #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+    let scratchpad = unsafe {
+        Scratchpad::new(
+            MaybeUninit::uninit().assume_init(),
+            MaybeUninit::uninit().assume_init(),
+        )
+    };
+    #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
     let scratchpad =
         unsafe { Scratchpad::new(uninitialized(), uninitialized()) };
     validate_memory_limits(
@@ -448,6 +527,14 @@ fn validate_front_memory_limits() {
 /// scratchpad is correctly adjusted as allocations at the front increase.
 #[test]
 fn validate_back_memory_limits() {
+    #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+    let scratchpad = unsafe {
+        Scratchpad::new(
+            MaybeUninit::uninit().assume_init(),
+            MaybeUninit::uninit().assume_init(),
+        )
+    };
+    #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
     let scratchpad =
         unsafe { Scratchpad::new(uninitialized(), uninitialized()) };
     validate_memory_limits(
@@ -463,10 +550,22 @@ fn validate_back_memory_limits() {
 #[test]
 fn validate_front_memory_limits_in_place() {
     unsafe {
+        #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+        let mut scratchpad = MaybeUninit::uninit();
+        #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+        SimpleScratchpad::static_new_in_place(scratchpad.as_mut_ptr());
+        #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+        let scratchpad_ref = &*scratchpad.as_ptr();
+
+        #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
         let mut scratchpad = uninitialized();
+        #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
         SimpleScratchpad::static_new_in_place(&mut scratchpad);
+        #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+        let scratchpad_ref = &scratchpad;
+
         validate_memory_limits(
-            &scratchpad,
+            scratchpad_ref,
             |scratchpad| scratchpad.mark_front(),
             |scratchpad| scratchpad.mark_back(),
         );
@@ -479,10 +578,22 @@ fn validate_front_memory_limits_in_place() {
 #[test]
 fn validate_back_memory_limits_in_place() {
     unsafe {
+        #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+        let mut scratchpad = MaybeUninit::uninit();
+        #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+        SimpleScratchpad::static_new_in_place(scratchpad.as_mut_ptr());
+        #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+        let scratchpad_ref = &*scratchpad.as_ptr();
+
+        #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
         let mut scratchpad = uninitialized();
+        #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
         SimpleScratchpad::static_new_in_place(&mut scratchpad);
+        #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+        let scratchpad_ref = &scratchpad;
+
         validate_memory_limits(
-            &scratchpad,
+            scratchpad_ref,
             |scratchpad| scratchpad.mark_back(),
             |scratchpad| scratchpad.mark_front(),
         );
@@ -498,8 +609,8 @@ fn validate_marker_limits<'scratchpad, MF, OF, M, O>(
 ) where
     MF: Fn(&'scratchpad SimpleScratchpad) -> Result<M, Error<()>>,
     OF: Fn(&'scratchpad SimpleScratchpad) -> Result<O, Error<()>>,
-    M: Marker + fmt::Debug,
-    O: Marker + fmt::Debug,
+    M: Marker,
+    O: Marker,
 {
     let test_marker_allocation = |markers_available| {
         let mut markers = ArrayVec::<[M; MAX_MARKERS]>::new();
@@ -508,7 +619,7 @@ fn validate_marker_limits<'scratchpad, MF, OF, M, O>(
         }
 
         let result = mark(scratchpad);
-        assert_eq!(result.unwrap_err().kind(), ErrorKind::MarkerLimit);
+        assert_eq!(unwrap_mark_err(result).kind(), ErrorKind::MarkerLimit);
     };
 
     let mut opposite_markers = ArrayVec::<[O; MAX_MARKERS]>::new();
@@ -524,6 +635,14 @@ fn validate_marker_limits<'scratchpad, MF, OF, M, O>(
 /// scratchpad is correctly adjusted as markers set at the back increase.
 #[test]
 fn validate_front_marker_limits() {
+    #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+    let scratchpad = unsafe {
+        Scratchpad::new(
+            MaybeUninit::uninit().assume_init(),
+            MaybeUninit::uninit().assume_init(),
+        )
+    };
+    #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
     let scratchpad =
         unsafe { Scratchpad::new(uninitialized(), uninitialized()) };
     validate_marker_limits(
@@ -537,6 +656,14 @@ fn validate_front_marker_limits() {
 /// scratchpad is correctly adjusted as markers set at the front increase.
 #[test]
 fn validate_back_marker_limits() {
+    #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+    let scratchpad = unsafe {
+        Scratchpad::new(
+            MaybeUninit::uninit().assume_init(),
+            MaybeUninit::uninit().assume_init(),
+        )
+    };
+    #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
     let scratchpad =
         unsafe { Scratchpad::new(uninitialized(), uninitialized()) };
     validate_marker_limits(
@@ -552,10 +679,22 @@ fn validate_back_marker_limits() {
 #[test]
 fn validate_front_marker_limits_in_place() {
     unsafe {
+        #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+        let mut scratchpad = MaybeUninit::uninit();
+        #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+        SimpleScratchpad::static_new_in_place(scratchpad.as_mut_ptr());
+        #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+        let scratchpad_ref = &*scratchpad.as_ptr();
+
+        #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
         let mut scratchpad = uninitialized();
+        #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
         SimpleScratchpad::static_new_in_place(&mut scratchpad);
+        #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+        let scratchpad_ref = &scratchpad;
+
         validate_marker_limits(
-            &scratchpad,
+            scratchpad_ref,
             |scratchpad| scratchpad.mark_front(),
             |scratchpad| scratchpad.mark_back(),
         );
@@ -568,10 +707,22 @@ fn validate_front_marker_limits_in_place() {
 #[test]
 fn validate_back_marker_limits_in_place() {
     unsafe {
+        #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+        let mut scratchpad = MaybeUninit::uninit();
+        #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+        SimpleScratchpad::static_new_in_place(scratchpad.as_mut_ptr());
+        #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+        let scratchpad_ref = &*scratchpad.as_ptr();
+
+        #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
         let mut scratchpad = uninitialized();
+        #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
         SimpleScratchpad::static_new_in_place(&mut scratchpad);
+        #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+        let scratchpad_ref = &scratchpad;
+
         validate_marker_limits(
-            &scratchpad,
+            scratchpad_ref,
             |scratchpad| scratchpad.mark_back(),
             |scratchpad| scratchpad.mark_front(),
         );

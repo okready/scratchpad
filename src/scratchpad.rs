@@ -15,7 +15,11 @@ use super::{
     Buffer, Error, ErrorKind, MarkerBack, MarkerFront, StaticBuffer, Tracking,
 };
 use core::cell::{Cell, UnsafeCell};
-use core::mem::{size_of, uninitialized};
+use core::mem::size_of;
+#[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+use core::mem::uninitialized;
+#[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+use core::mem::MaybeUninit;
 use core::ops::{Deref, DerefMut};
 
 /// Front and back stacks for `Marker` tracking (used internally).
@@ -277,16 +281,25 @@ where
     /// # #[macro_use]
     /// # extern crate scratchpad;
     /// use scratchpad::Scratchpad;
-    /// use std::mem::uninitialized;
+    /// # #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+    /// # use std::mem::uninitialized;
+    /// # #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+    /// use std::mem::MaybeUninit;
     ///
     /// # fn main() {
     /// // Creates a scratchpad that can hold up to 256 bytes of data and up
     /// // to 4 allocation markers. The initial contents of each buffer are
     /// // ignored, so we can provide uninitialized data in order to reduce
     /// // the runtime overhead of creating a scratchpad.
+    /// # #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+    /// # let scratchpad = unsafe { Scratchpad::new(
+    /// #     uninitialized::<array_type_for_bytes!(u64, 256)>(),
+    /// #     uninitialized::<array_type_for_markers!(usize, 4)>(),
+    /// # ) };
+    /// # #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
     /// let scratchpad = unsafe { Scratchpad::new(
-    ///     uninitialized::<array_type_for_bytes!(u64, 256)>(),
-    ///     uninitialized::<array_type_for_markers!(usize, 4)>(),
+    ///     MaybeUninit::<array_type_for_bytes!(MaybeUninit<u64>, 256)>::uninit().assume_init(),
+    ///     MaybeUninit::<array_type_for_markers!(MaybeUninit<usize>, 4)>::uninit().assume_init(),
     /// ) };
     /// # }
     /// ```
@@ -319,16 +332,25 @@ where
     /// # #[macro_use]
     /// # extern crate scratchpad;
     /// use scratchpad::Scratchpad;
-    /// use std::mem::uninitialized;
+    /// # #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+    /// # use std::mem::uninitialized;
+    /// # #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+    /// use std::mem::MaybeUninit;
     ///
     /// # fn main() {
     /// // Creates a scratchpad that can hold up to 256 bytes of data and up
     /// // to 4 allocation markers. The initial contents of each buffer are
     /// // ignored, so we can provide uninitialized data in order to reduce
     /// // the runtime overhead of creating a scratchpad.
+    /// # #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+    /// # let scratchpad = unsafe { Scratchpad::new(
+    /// #     uninitialized::<array_type_for_bytes!(u64, 256)>(),
+    /// #     uninitialized::<array_type_for_markers!(usize, 4)>(),
+    /// # ) };
+    /// # #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
     /// let scratchpad = unsafe { Scratchpad::new(
-    ///     uninitialized::<array_type_for_bytes!(u64, 256)>(),
-    ///     uninitialized::<array_type_for_markers!(usize, 4)>(),
+    ///     MaybeUninit::<array_type_for_bytes!(MaybeUninit<u64>, 256)>::uninit().assume_init(),
+    ///     MaybeUninit::<array_type_for_markers!(MaybeUninit<usize>, 4)>::uninit().assume_init(),
     /// ) };
     /// # }
     /// ```
@@ -367,19 +389,34 @@ where
     /// boxed slices if this occurs, or alternatively use the unsafe
     /// [`static_new_in_place()`] function to create the `Scratchpad`.
     ///
+    /// It is strongly recommended to use arrays of [`MaybeUninit`] elements
+    /// for both allocation and tracking storage if possible when using this
+    /// function. Even though [`ByteData`] types can safely store any pattern
+    /// of bits without causing undefined behavior, the rules in Rust for
+    /// using integers whose memory is specifically uninitialized have not
+    /// been finalized.
+    ///
     /// # Examples
     ///
     /// ```
     /// # #[macro_use]
     /// # extern crate scratchpad;
     /// use scratchpad::Scratchpad;
+    /// # #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+    /// use std::mem::MaybeUninit;
     ///
     /// # fn main() {
     /// // Creates a scratchpad that can hold up to 256 bytes of data and up
     /// // to 4 allocation markers.
+    /// # #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+    /// # let scratchpad = Scratchpad::<
+    /// #     array_type_for_bytes!(u64, 256),
+    /// #     array_type_for_markers!(usize, 4),
+    /// # >::static_new();
+    /// # #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
     /// let scratchpad = Scratchpad::<
-    ///     array_type_for_bytes!(u64, 256),
-    ///     array_type_for_markers!(usize, 4),
+    ///     array_type_for_bytes!(MaybeUninit<u64>, 256),
+    ///     array_type_for_markers!(MaybeUninit<usize>, 4),
     /// >::static_new();
     /// # }
     /// ```
@@ -387,16 +424,29 @@ where
     /// [`Buffer`]: trait.Buffer.html
     /// [`Tracking`]: trait.Tracking.html
     /// [`static_new_in_place()`]: #method.static_new_in_place
+    /// [`MaybeUninit`]: https://doc.rust-lang.org/std/mem/union.MaybeUninit.html
+    /// [`ByteData`]: trait.ByteData.html
     #[inline(always)]
     pub fn static_new() -> Self {
-        Scratchpad {
+        #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+        return Scratchpad {
+            buffer: unsafe { MaybeUninit::uninit().assume_init() },
+            markers: RefCell::new(MarkerStacks {
+                data: unsafe { MaybeUninit::uninit().assume_init() },
+                front: 0,
+                back: size_of::<TrackingT>() / size_of::<usize>(),
+            }),
+        };
+
+        #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+        return Scratchpad {
             buffer: unsafe { uninitialized() },
             markers: RefCell::new(MarkerStacks {
                 data: unsafe { uninitialized() },
                 front: 0,
                 back: size_of::<TrackingT>() / size_of::<usize>(),
             }),
-        }
+        };
     }
 
     /// Initializes a new instance in uninitialized memory for scratchpad
@@ -406,6 +456,13 @@ where
     /// static arrays while guaranteeing that both arrays and the created
     /// `Scratchpad` are never accidentally stored on the stack, avoiding
     /// possible stack overflow.
+    ///
+    /// It is strongly recommended to use arrays of [`MaybeUninit`] elements
+    /// for both allocation and tracking storage if possible when using this
+    /// function. Even though [`ByteData`] types can safely store any pattern
+    /// of bits without causing undefined behavior, the rules in Rust for
+    /// using integers whose memory is specifically uninitialized have not
+    /// been finalized.
     ///
     /// # Safety
     ///
@@ -417,11 +474,9 @@ where
     /// `dst` must be properly aligned for storage of an instance of
     /// `Scratchpad`.
     ///
-    /// After returning, the contents of `dst` should be dropped when no
-    /// longer in use before the memory pointed to by `dst` is freed. If `dst`
-    /// points to memory that belongs to an actual `Scratchpad` instance, the
-    /// drop implementation will likely be called automatically when the
-    /// variable is destroyed.
+    /// After returning, the contents of `dst` will need to be dropped when
+    /// the scratchpad is no longer in use before the memory pointed to by
+    /// `dst` is freed.
     ///
     /// # Examples
     ///
@@ -429,12 +484,20 @@ where
     /// # #[macro_use]
     /// # extern crate scratchpad;
     /// use scratchpad::{CacheAligned, Scratchpad};
+    /// # #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+    /// use std::mem::MaybeUninit;
     ///
     /// // Scratchpad that can hold up to 1 MB of data and up to 16 allocation
     /// // markers.
+    /// # #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+    /// # type LargeScratchpad = Scratchpad<
+    /// #     array_type_for_bytes!(CacheAligned, 1024 * 1024),
+    /// #     array_type_for_markers!(usize, 16),
+    /// # >;
+    /// # #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
     /// type LargeScratchpad = Scratchpad<
-    ///     array_type_for_bytes!(CacheAligned, 1024 * 1024),
-    ///     array_type_for_markers!(usize, 16),
+    ///     array_type_for_bytes!(MaybeUninit<CacheAligned>, 1024 * 1024),
+    ///     array_type_for_markers!(MaybeUninit<usize>, 16),
     /// >;
     ///
     /// # fn main() {
@@ -445,7 +508,7 @@ where
     ///     let mut memory = Vec::with_capacity(1);
     ///     memory.set_len(1);
     ///
-    ///     LargeScratchpad::static_new_in_place(&mut memory[0]);
+    ///     LargeScratchpad::static_new_in_place(memory.as_mut_ptr());
     ///
     ///     let scratchpad = &memory[0];
     ///     let marker = scratchpad.mark_front().unwrap();
@@ -455,8 +518,8 @@ where
     /// # }
     /// ```
     ///
-    /// [`Buffer`]: trait.Buffer.html
-    /// [`Tracking`]: trait.Tracking.html
+    /// [`MaybeUninit`]: https://doc.rust-lang.org/std/mem/union.MaybeUninit.html
+    /// [`ByteData`]: trait.ByteData.html
     #[inline]
     pub unsafe fn static_new_in_place(dst: *mut Self) {
         // `UnsafeCell<T>` simply wraps a `T` value, so we don't need to do

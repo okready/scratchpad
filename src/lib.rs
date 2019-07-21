@@ -86,15 +86,31 @@
 //! use scratchpad::uninitialized_boxed_slice_for_bytes;
 //! use scratchpad::uninitialized_boxed_slice_for_markers;
 //! use scratchpad::CacheAligned;
+//! # #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+//! use std::mem::MaybeUninit;
 //!
 //! const POOL_SIZE: usize = 1usize * 1024 * 1024; // 1 MB
 //! const MARKERS_MAX: usize = 16;
 //!
+//! # #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+//! # let pool = unsafe {
+//! #     uninitialized_boxed_slice_for_bytes::<CacheAligned>(POOL_SIZE)
+//! # };
+//! # #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+//! # let tracking = unsafe {
+//! #     uninitialized_boxed_slice_for_markers::<CacheAligned>(MARKERS_MAX)
+//! # };
+//! # #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
 //! let pool = unsafe {
-//!     uninitialized_boxed_slice_for_bytes::<CacheAligned>(POOL_SIZE)
+//!     uninitialized_boxed_slice_for_bytes::<MaybeUninit<CacheAligned>>(
+//!         POOL_SIZE
+//!     )
 //! };
+//! # #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
 //! let tracking = unsafe {
-//!     uninitialized_boxed_slice_for_markers::<CacheAligned>(MARKERS_MAX)
+//!     uninitialized_boxed_slice_for_markers::<MaybeUninit<CacheAligned>>(
+//!         MARKERS_MAX
+//!     )
 //! };
 //! ```
 //!
@@ -285,6 +301,12 @@
 //!     prior to 1.26 (`u128`/`i128` support is enabled by default with both
 //!     stable and unstable toolchains if the detected Rust version is 1.26 or
 //!     greater).
+//!   - [`ByteData`] trait implementation for all
+//!     [`std::mem::MaybeUninit`][`MaybeUninit`] types wrapping other
+//!     [`ByteData`] types (e.g. `MaybeUninit<usize>`) for Rust versions prior
+//!     to 1.36 ([`MaybeUninit`] support is enabled by default with both
+//!     stable and unstable toolchains if the detected Rust version is 1.36 or
+//!     greater).
 //!
 //! # Implementation Notes
 //!
@@ -378,7 +400,10 @@
 //! SIMD allocations can be created as follows:
 //!
 //! ```
-//! use std::mem::uninitialized;
+//! # #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+//! # use std::mem::uninitialized;
+//! # #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+//! use std::mem::MaybeUninit;
 //! use scratchpad::{ByteData, Scratchpad};
 //!
 //! #[repr(align(16))]
@@ -386,9 +411,18 @@
 //!
 //! unsafe impl ByteData for Aligned16 {}
 //!
-//! let scratchpad = Scratchpad::<[Aligned16; 1024], [usize; 4]>::new(
-//!     unsafe { uninitialized() },
-//!     unsafe { uninitialized() },
+//! # #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+//! # let scratchpad = Scratchpad::<[Aligned16; 1024], [usize; 4]>::new(
+//! #     unsafe { uninitialized() },
+//! #     unsafe { uninitialized() },
+//! # );
+//! # #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+//! let scratchpad = Scratchpad::<
+//!     [MaybeUninit<Aligned16>; 1024],
+//!     [MaybeUninit<usize>; 4],
+//! >::new(
+//!     unsafe { MaybeUninit::uninit().assume_init() },
+//!     unsafe { MaybeUninit::uninit().assume_init() },
 //! );
 //! ```
 //!
@@ -468,6 +502,27 @@
 //!
 //! # Known Issues
 //!
+//! - This crate allows for working with uninitialized memory for allocation
+//!   and tracking buffers, but predates the [`MaybeUninit`] type. To retain
+//!   backwards-compatibility with earlier crate releases, array and slice
+//!   types used for uninitialized memory are allowed to contain elements of
+//!   any [`ByteData`] type and not just [`MaybeUninit`]-wrapped types.
+//!   [`ByteData`] types are restricted to the built-in integer types and some
+//!   aggregates of those types, and while such values can safely store any
+//!   possible pattern of bits without causing undefined behavior, the rules
+//!   in Rust for using integers whose memory is specifically uninitialized
+//!   have not been finalized. Until such rules have been finalized, it is
+//!   recommended to use [`MaybeUninit`] variants of these types if possible
+//!   when working with uninitialized memory to avoid undefined behavior.
+//!
+//!   Affected functions include:
+//!
+//!   - [`Scratchpad::static_new()`]
+//!   - [`Scratchpad::static_new_in_place()`]
+//!   - [`uninitialized_boxed_slice()`]
+//!   - [`uninitialized_boxed_slice_for_bytes()`]
+//!   - [`uninitialized_boxed_slice_for_markers()`]
+//!
 //! - [`IntoMutSliceLikePtr::into_mut_slice_like_ptr()`] is not declared as
 //!   `unsafe`, as the implementations included by this crate don't need to
 //!   read the data pointed to by pointer given at this time (they can operate
@@ -503,7 +558,10 @@
 //!
 //! use scratchpad::{CacheAligned, Scratchpad};
 //! use scratchpad::uninitialized_boxed_slice_for_bytes;
-//! use std::mem::{size_of, uninitialized};
+//! # #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+//! # use std::mem::{size_of, uninitialized};
+//! # #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+//! use std::mem::{MaybeUninit, size_of};
 //! use std::os::raw::c_void;
 //!
 //! /// Thread-local scratchpad size, in bytes (1 MB).
@@ -513,12 +571,21 @@
 //!
 //! /// Buffer type for thread-local scratchpad allocations. By using
 //! /// `CacheAligned`, we avoid false sharing of cache lines between threads.
-//! type ThreadLocalScratchBuffer = Box<[CacheAligned]>;
+//! # #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+//! # type ThreadLocalScratchBuffer = Box<[CacheAligned]>;
+//! # #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+//! type ThreadLocalScratchBuffer = Box<[MaybeUninit<CacheAligned>]>;
 //!
 //! /// Buffer type for tracking of thread-local scratchpad markers (each
 //! /// marker requires a `usize` value).
+//! # #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+//! # type ThreadLocalScratchTracking = array_type_for_markers!(
+//! #     CacheAligned,
+//! #     THREAD_LOCAL_SCRATCHPAD_MAX_MARKERS,
+//! # );
+//! # #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
 //! type ThreadLocalScratchTracking = array_type_for_markers!(
-//!     CacheAligned,
+//!     MaybeUninit<CacheAligned>,
 //!     THREAD_LOCAL_SCRATCHPAD_MAX_MARKERS,
 //! );
 //!
@@ -526,12 +593,21 @@
 //!     /// Thread-local scratchpad. The initial contents of the allocation
 //!     /// buffer and marker tracking buffer are ignored, so we can create
 //!     /// them as uninitialized.
+//! #     #[cfg(not(any(stable_maybe_uninit, feature = "unstable")))]
+//! #     pub static THREAD_LOCAL_SCRATCHPAD: Scratchpad<
+//! #         ThreadLocalScratchBuffer,
+//! #         ThreadLocalScratchTracking,
+//! #     > = unsafe { Scratchpad::new(
+//! #         uninitialized_boxed_slice_for_bytes(THREAD_LOCAL_SCRATCHPAD_SIZE),
+//! #         uninitialized(),
+//! #     ) };
+//! #     #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
 //!     pub static THREAD_LOCAL_SCRATCHPAD: Scratchpad<
 //!         ThreadLocalScratchBuffer,
 //!         ThreadLocalScratchTracking,
 //!     > = unsafe { Scratchpad::new(
 //!         uninitialized_boxed_slice_for_bytes(THREAD_LOCAL_SCRATCHPAD_SIZE),
-//!         uninitialized(),
+//!         MaybeUninit::uninit().assume_init(),
 //!     ) };
 //! }
 //!
@@ -661,6 +737,7 @@
 //! [`MarkerFront::append()`]: struct.MarkerFront.html#method.append
 //! [`MarkerFront::append_clone()`]: struct.MarkerFront.html#method.append_clone
 //! [`MarkerFront::append_copy()`]: struct.MarkerFront.html#method.append_copy
+//! [`MaybeUninit`]: https://doc.rust-lang.org/std/mem/union.MaybeUninit.html
 //! [`owning_ref`]: https://crates.io/crates/owning_ref
 //! [`rental`]: https://crates.io/crates/rental
 //! [`Scratchpad`]: struct.Scratchpad.html
@@ -682,6 +759,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(all(feature = "unstable", not(feature = "std")), feature(alloc))]
 #![cfg_attr(feature = "unstable", feature(const_fn))]
+#![cfg_attr(
+    all(not(stable_maybe_uninit), feature = "unstable"),
+    feature(maybe_uninit)
+)]
 // LINT: Disabling `ptr_offset_with_cast` warning since using the pointer
 //       `add` method would break Rust 1.25 compatibility (`add` was not
 //       introduced until 1.26). As of Rust 1.32.0, `add` simply calls
