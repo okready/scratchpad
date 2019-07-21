@@ -694,7 +694,7 @@ fn marker_extend_test() {
             v.push(DropCounter::new(&drop_count));
             v.push(DropCounter::new(&drop_count));
 
-            let mut bs = v.clone().into_boxed_slice();
+            let bs = v.clone().into_boxed_slice();
 
             let ba = Box::new([
                 DropCounter::new(&drop_count),
