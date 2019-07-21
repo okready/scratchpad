@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 ### Changed
 - Updated Travis CI configuration to use `clippy` and `rustfmt` from the
-  stable toolchain, and updated the code accordingly (based on the 1.32.0
+  stable toolchain, and updated the code accordingly (based on the 1.36.0
   toolchain versions).
 - Minor API documentation improvements.
 
@@ -196,7 +196,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Added
 - Initial release.
 
-[Unreleased]: https://github.com/okready/scratchpad/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/okready/scratchpad/compare/v1.2.0...1.x
 [1.2.0]: https://github.com/okready/scratchpad/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/okready/scratchpad/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/okready/scratchpad/compare/v1.0.0...v1.0.1

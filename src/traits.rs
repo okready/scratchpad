@@ -504,11 +504,13 @@ impl SliceLike for CStr {
     /// [`CStr`]: https://doc.rust-lang.org/std/ffi/struct.CStr.html
     #[inline]
     unsafe fn as_element_slice_mut(&mut self) -> &mut [Self::Element] {
-        // This looks dangerous, but I would think it's safe to assume the
-        // compiler won't perform any optimizations that break our conversion
-        // from a `*const [u8]` to a `*mut [u8]` considering we still maintain
-        // a mutable reference to `self` throughout this function (and the
-        // lifetime of the returned slice due to Rust's borrowing rules).
+        // TODO: Converting from a constant reference to a mutable reference
+        //       is technically undefined behavior, but aliasing of the
+        //       constant reference is prevented by the fact that we take a
+        //       mutable reference to the `CStr` slice as an argument.
+        //       Regardless, a better alternative should be found if possible.
+        // LINT: Allowing mutable cast for the time being (see above TODO).
+        #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ref_to_mut))]
         &mut *(self.to_bytes_with_nul() as *const [u8] as *mut [u8])
     }
 
@@ -574,9 +576,13 @@ impl SliceLike for CStr {
     unsafe fn from_element_slice_mut(
         slice: &mut [Self::Element],
     ) -> &mut Self {
-        // This makes the same assumption as `as_element_slice_mut()` above
-        // (i.e. we should be okay due to the fact that we maintain mutable
-        // references to the same data before and after the ugly casts).
+        // TODO: This makes the same assumption as `as_element_slice_mut()`
+        //       above with regards to casting from a constant reference to a
+        //       mutable reference. Seeing as it still falls under the blanket
+        //       of undefined behavior, an alternative should be used if
+        //       possible.
+        // LINT: Allowing mutable cast for the time being (see above TODO).
+        #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ref_to_mut))]
         &mut *(CStr::from_bytes_with_nul_unchecked(slice) as *const CStr
             as *mut CStr)
     }

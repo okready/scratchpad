@@ -463,7 +463,10 @@ pub trait Marker {
     {
         // Verify that the allocation is at the end of the marker.
         if !self.is_allocation_at_end(&allocation) {
-            return Err(Error::new(ErrorKind::NotAtEnd, (allocation, values)));
+            return Err(Error::new(
+                ErrorKind::NotAtEnd,
+                (allocation, values),
+            ));
         }
 
         // Create a new allocation for the value given and merge the two
