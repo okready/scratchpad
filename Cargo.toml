@@ -17,10 +17,15 @@ travis-ci = { repository = "okready/scratchpad" }
 [features]
 default = ["std"]
 
-# Allow `std` library usage (`Box` and `Vec` support).
+# Enables `std` library use. This is required for `Box` and `Vec` support on
+# stable toolchains prior to Rust 1.36.0.
 std = []
 
-# Allow unstable features (requires a nightly toolchain).
+# Enables stable `alloc` library use for `Box` and `Vec` support. Requires
+# Rust 1.36.0 or later. Ignored if `std` is enabled.
+alloc = []
+
+# Enables unstable features (requires a nightly toolchain).
 unstable = []
 
 [dependencies]

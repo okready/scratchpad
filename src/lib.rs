@@ -291,22 +291,23 @@
 //!   tracking as well as both boxes and vectors to be used as slice sources
 //!   for [`Marker`] methods that take slices as parameters. Enabled by
 //!   default; can be disabled to build the crate with `#![no_std]`.
-//! - **`unstable`**: Enables unstable toolchain features (requires a nightly
-//!   compiler). Disabled by default. Enabling this feature includes:
-//!   - Support for [`Box`] and [`Vec`] types as mentioned with the `std`
-//!     feature, regardless of whether the `std` feature is enabled (if `std`
-//!     is disabled, this will use the `alloc` library directly).
+//! - **`alloc`**: Implements the same support for [`Box`] and [`Vec`] as the
+//!   `std` feature, but uses the `alloc` crate directly, allowing for use in
+//!   `no_std` code. Requires Rust 1.36.0 or later. Disabled by default.
+//! - **`unstable`**: Enables unstable Rust features (requires a nightly
+//!   toolchain). Disabled by default. Enabling this feature includes:
 //!   - Declaration of the function [`Scratchpad::new()`] as `const`.
-//!   - [`ByteData`] trait implementations for `u128`/`i128` for Rust versions
-//!     prior to 1.26 (`u128`/`i128` support is enabled by default with both
-//!     stable and unstable toolchains if the detected Rust version is 1.26 or
-//!     greater).
-//!   - [`ByteData`] trait implementation for all
-//!     [`std::mem::MaybeUninit`][`MaybeUninit`] types wrapping other
-//!     [`ByteData`] types (e.g. `MaybeUninit<usize>`) for Rust versions prior
-//!     to 1.36 ([`MaybeUninit`] support is enabled by default with both
-//!     stable and unstable toolchains if the detected Rust version is 1.36 or
-//!     greater).
+//!   - Support for various features that were still unstable with legacy Rust
+//!     releases:
+//!     - [`Box`] and [`Vec`] support for `no_std` code (enabled without the
+//!       `unstable` feature when using Rust 1.36.0 or later with the `alloc`
+//!       feature enabled).
+//!     - [`ByteData`] trait implementations for `u128` and `i128` (enabled
+//!       without the `unstable` feature when using Rust 1.26.0 or later).
+//!     - [`ByteData`] trait implementation for all
+//!       [`std::mem::MaybeUninit`][`MaybeUninit`] types wrapping other
+//!       [`ByteData`] types (enabled without the `unstable` feature when
+//!       using Rust 1.36.0 or later).
 //!
 //! # Implementation Notes
 //!
@@ -757,7 +758,10 @@
 //! [`Vec`]: https://doc.rust-lang.org/std/vec/index.html
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(all(feature = "unstable", not(feature = "std")), feature(alloc))]
+#![cfg_attr(
+    all(feature = "unstable", not(feature = "std"), not(feature = "alloc")),
+    feature(alloc)
+)]
 #![cfg_attr(feature = "unstable", feature(const_fn))]
 #![cfg_attr(
     all(not(stable_maybe_uninit), feature = "unstable"),
@@ -769,7 +773,10 @@
 //       `offset` with a cast anyway, so they are functionally equivalent.
 #![cfg_attr(feature = "cargo-clippy", allow(clippy::ptr_offset_with_cast))]
 
-#[cfg(all(feature = "unstable", not(feature = "std")))]
+#[cfg(all(
+    any(feature = "alloc", feature = "unstable"),
+    not(feature = "std")
+))]
 extern crate alloc;
 #[cfg(feature = "std")]
 extern crate core;
@@ -784,9 +791,15 @@ use std::boxed::Box;
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
-#[cfg(all(feature = "unstable", not(feature = "std")))]
+#[cfg(all(
+    any(feature = "alloc", feature = "unstable"),
+    not(feature = "std")
+))]
 use alloc::boxed::Box;
-#[cfg(all(feature = "unstable", not(feature = "std")))]
+#[cfg(all(
+    any(feature = "alloc", feature = "unstable"),
+    not(feature = "std")
+))]
 use alloc::vec::Vec;
 
 // Re-export `size_of()` for easier use with our exported macros.

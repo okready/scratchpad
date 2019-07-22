@@ -11,7 +11,7 @@
 use core::fmt;
 use core::mem::{align_of, size_of};
 
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 use super::{Box, ByteData, Vec};
 
 /// Returns the minimum number of elements of a given type necessary for
@@ -348,7 +348,7 @@ impl fmt::Debug for CacheAligned {
 /// ```
 ///
 /// [undefined behavior]: https://doc.rust-lang.org/reference/behavior-considered-undefined.html
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 #[inline]
 pub unsafe fn uninitialized_boxed_slice<T>(len: usize) -> Box<[T]>
 where
@@ -391,7 +391,7 @@ where
 /// ```
 ///
 /// [undefined behavior]: https://doc.rust-lang.org/reference/behavior-considered-undefined.html
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 #[inline]
 pub unsafe fn uninitialized_boxed_slice_for_bytes<T>(bytes: usize) -> Box<[T]>
 where
@@ -435,7 +435,7 @@ where
 ///
 /// [allocation markers]: trait.Marker.html
 /// [undefined behavior]: https://doc.rust-lang.org/reference/behavior-considered-undefined.html
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 #[inline]
 pub unsafe fn uninitialized_boxed_slice_for_markers<T>(
     marker_count: usize,

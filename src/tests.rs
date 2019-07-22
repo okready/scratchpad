@@ -15,7 +15,7 @@ use core::mem::uninitialized;
 #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
 use core::mem::MaybeUninit;
 
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 use super::{Box, Vec};
 
 // Struct that increments a counter each time it is dropped (used for testing
@@ -839,7 +839,7 @@ fn marker_extend_test() {
             .extend(allocation, [DropCounter::new(&drop_count)])
             .unwrap();
 
-        #[cfg(any(feature = "std", feature = "unstable"))]
+        #[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
         let allocation = {
             let mut v = Vec::with_capacity(2);
             v.push(DropCounter::new(&drop_count));
@@ -865,7 +865,11 @@ fn marker_extend_test() {
         let _ = allocation; // Silence unused variable warnings...
     }
 
-    if cfg!(any(feature = "std", feature = "unstable")) {
+    if cfg!(any(
+        feature = "std",
+        feature = "alloc",
+        feature = "unstable"
+    )) {
         assert_eq!(drop_count.get(), 8);
     } else {
         assert_eq!(drop_count.get(), 2);
@@ -929,7 +933,7 @@ fn slice_move_source_collection_tuple_test() {
 
         // `Box` and `Vec` may not be testable depending on the feature set,
         // so use different types if they're not available.
-        #[cfg(any(feature = "std", feature = "unstable"))]
+        #[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
         let (b, c) = {
             let mut c = Vec::new();
             c.push(DropCounter::new(&drop_count));
@@ -945,7 +949,11 @@ fn slice_move_source_collection_tuple_test() {
             )
         };
 
-        #[cfg(not(any(feature = "std", feature = "unstable")))]
+        #[cfg(not(any(
+            feature = "std",
+            feature = "alloc",
+            feature = "unstable"
+        )))]
         let (b, c) = (
             [DropCounter::new(&drop_count), DropCounter::new(&drop_count)],
             [
@@ -983,7 +991,7 @@ fn slice_move_source_collection_array_test() {
     assert_eq!(drop_count.get(), 3);
     drop_count.set(0);
 
-    #[cfg(any(feature = "std", feature = "unstable"))]
+    #[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
     {
         {
             let marker = scratchpad.mark_back().unwrap();
@@ -1020,7 +1028,7 @@ fn slice_move_source_collection_array_test() {
 /// Tests vector implementations of `SliceMoveSourceCollection` use for
 /// possible leaks or unintentional dropping of elements.
 #[test]
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 fn slice_move_source_collection_vec_test() {
     let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
     let drop_count = Cell::new(0);
@@ -1088,7 +1096,7 @@ fn slice_move_source_collection_vec_test() {
 /// Tests boxed slice implementations of `SliceMoveSourceCollection` use for
 /// possible leaks or unintentional dropping of elements.
 #[test]
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 fn slice_move_source_collection_boxed_slice_test() {
     let scratchpad = Scratchpad::<[usize; 3], [usize; 1]>::static_new();
     let drop_count = Cell::new(0);

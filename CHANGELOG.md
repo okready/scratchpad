@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 ### Added
+- Stable toolchain `alloc` crate support for `no_std` code via the `alloc`
+  feature. This requires Rust 1.36 or later.
 - `ByteData` support for `std::mem::MaybeUninit` types that wrap other
   `ByteData` types (e.g. `MaybeUninit<usize>`) when using Rust 1.36 or later
   or when the `unstable` feature is enabled.

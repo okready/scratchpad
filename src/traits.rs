@@ -20,9 +20,9 @@ use core::mem::{forget, size_of};
 #[cfg(feature = "std")]
 use std::ffi::CStr;
 
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 use super::{Box, Vec};
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 use core::mem::ManuallyDrop;
 
 /// Trait for types that can be safely used as the backing data type for
@@ -158,7 +158,7 @@ where
     }
 }
 
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 impl<T> Buffer for Box<[T]>
 where
     T: ByteData,
@@ -791,7 +791,7 @@ where
     }
 }
 
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 impl<T> SliceSource<T> for Box<T>
 where
     T: SliceLike + ?Sized,
@@ -802,7 +802,7 @@ where
     }
 }
 
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 impl<T> SliceSource<[T]> for Vec<T> {
     #[inline]
     fn as_slice_like(&self) -> &[T] {
@@ -810,7 +810,7 @@ impl<T> SliceSource<[T]> for Vec<T> {
     }
 }
 
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 impl<'a, T> SliceSource<T> for &'a Box<T>
 where
     T: SliceLike + ?Sized,
@@ -821,7 +821,7 @@ where
     }
 }
 
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 impl<'a, T> SliceSource<[T]> for &'a Vec<T> {
     #[inline]
     fn as_slice_like(&self) -> &[T] {
@@ -893,7 +893,7 @@ where
     }
 }
 
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 impl<T> SliceMoveSource<T> for Box<T>
 where
     T: SliceLike + ?Sized,
@@ -914,7 +914,7 @@ where
     }
 }
 
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 impl<T> SliceMoveSource<[T]> for Vec<T> {
     fn move_elements<F>(self, mut f: F)
     where
@@ -926,7 +926,7 @@ impl<T> SliceMoveSource<[T]> for Vec<T> {
     }
 }
 
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 impl<'a, T> SliceMoveSource<T> for &'a Box<T>
 where
     T: SliceLike + ?Sized,
@@ -942,7 +942,7 @@ where
     }
 }
 
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 impl<'a, T> SliceMoveSource<[T]> for &'a Vec<T>
 where
     T: Copy,
@@ -1034,7 +1034,7 @@ where
     }
 }
 
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 impl<T, U> SliceSourceCollection<T> for Box<[U]>
 where
     T: SliceLike + ?Sized,
@@ -1050,7 +1050,7 @@ where
     }
 }
 
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 impl<T, U> SliceSourceCollection<T> for Vec<U>
 where
     T: SliceLike + ?Sized,
@@ -1066,7 +1066,7 @@ where
     }
 }
 
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 impl<'b, T, U> SliceSourceCollection<T> for &'b Box<[U]>
 where
     T: SliceLike + ?Sized,
@@ -1082,7 +1082,7 @@ where
     }
 }
 
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 impl<'b, T, U> SliceSourceCollection<T> for &'b Vec<U>
 where
     T: SliceLike + ?Sized,
@@ -1166,7 +1166,7 @@ where
     }
 }
 
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 impl<T, U> SliceMoveSourceCollection<T> for Box<[U]>
 where
     T: SliceLike + ?Sized,
@@ -1186,7 +1186,7 @@ where
     }
 }
 
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 impl<T, U> SliceMoveSourceCollection<T> for Vec<U>
 where
     T: SliceLike + ?Sized,
@@ -1202,7 +1202,7 @@ where
     }
 }
 
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 impl<'b, T, U> SliceMoveSourceCollection<T> for &'b Box<[U]>
 where
     T: SliceLike + ?Sized,
@@ -1221,7 +1221,7 @@ where
     }
 }
 
-#[cfg(any(feature = "std", feature = "unstable"))]
+#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 impl<'b, T, U> SliceMoveSourceCollection<T> for &'b Vec<U>
 where
     T: SliceLike + ?Sized,

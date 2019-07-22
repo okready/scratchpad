@@ -11,6 +11,7 @@ rust:
 env:
 - FEATURE_ARGS=""
 - FEATURE_ARGS="--lib --no-default-features"
+- FEATURE_ARGS="--features alloc --lib --no-default-features"
 
 matrix:
   include:
@@ -30,6 +31,11 @@ matrix:
     env: FEATURE_ARGS="--features unstable"
   - rust: nightly
     env: FEATURE_ARGS="--features unstable --lib --no-default-features"
+  - rust: nightly
+    env: FEATURE_ARGS="--features alloc,unstable --lib --no-default-features"
+  exclude:
+  - rust: 1.25.0
+    env: FEATURE_ARGS="--features alloc --lib --no-default-features"
 
 script:
 - cargo test $FEATURE_ARGS --verbose

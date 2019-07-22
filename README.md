@@ -68,26 +68,33 @@ must be disabled in your `Cargo.toml`:
 scratchpad = { version = "1.3", default-features = false }
 ```
 
-`Box` and `Vec` support is still available for `no_std` builds when using a
-nightly toolchain by enabling the `unstable` crate feature.
+`Box` and `Vec` support is still available for `no_std` builds by enabling the
+`alloc` feature, which uses the `alloc` crate directly:
+
+```toml
+[dependencies]
+scratchpad = { version = "1.3", default-features = false, features = ["alloc"] }
+```
+
+The `alloc` feature requires Rust 1.36.0 or later. Older versions of the
+nightly toolchain can still use `Box` and `Vec` in `no_std` code via the
+`unstable` feature.
 
 ## Unstable Features
 
 The `unstable` crate feature provides some additional functionality when using
 a nightly toolchain:
 
-- Support for `Box` and `Vec` types as mentioned with the `std` feature,
-  regardless of whether the `std` feature is enabled (if `std` is disabled,
-  this will use the `alloc` library directly).
 - Declaration of the function `Scratchpad::new()` as `const`.
-- `ByteData` trait implementations for `u128`/`i128` for Rust versions prior
-  to 1.26 (`u128`/`i128` support is enabled by default with both stable and
-  unstable toolchains if the detected Rust version is 1.26 or greater).
-- `ByteData` trait implementation for all `std::mem::MaybeUninit` types
-  wrapping other `ByteData` types (e.g. `MaybeUninit<usize>`) for Rust
-  versions prior to 1.36 (`MaybeUninit` support is enabled by default with
-  both stable and unstable toolchains if the detected Rust version is 1.36 or
-  greater).
+- Support for various features that were still unstable with legacy Rust
+  releases:
+  - `Box` and `Vec` support for `no_std` code (enabled without the `unstable`
+    feature when using Rust 1.36.0 or later with the `alloc` feature enabled).
+  - `ByteData` trait implementations for `u128` and `i128` (enabled without
+    the `unstable` feature when using Rust 1.26.0 or later).
+  - `ByteData` trait implementation for all `std::mem::MaybeUninit` types
+    wrapping other `ByteData` types (enabled without the `unstable` feature
+    when using Rust 1.36.0 or later).
 
 Simply add the `unstable` feature to your `Cargo.toml` dependency:
 
