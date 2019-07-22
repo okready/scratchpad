@@ -9,6 +9,7 @@
 //! Miscellaneous utility routines and types.
 
 use core::fmt;
+use core::mem::{align_of, size_of};
 
 #[cfg(any(feature = "std", feature = "unstable"))]
 use super::{Box, ByteData, Vec};
@@ -263,13 +264,53 @@ pub const CACHE_ALIGNMENT: usize = 64;
 /// The alignment and size of `CacheAligned` are determined by the
 /// [`CACHE_ALIGNMENT`] constant.
 ///
+/// # Examples
+///
+/// ```
+/// # #[macro_use]
+/// # extern crate scratchpad;
+/// use scratchpad::{CacheAligned, CACHE_ALIGNMENT, Scratchpad};
+///
+/// fn is_cache_aligned<T>(ptr: *const T) -> bool {
+///     ptr as usize & (CACHE_ALIGNMENT - 1) == 0
+/// }
+///
+/// # fn main() {
+/// // `CacheAligned` elements are guaranteed to always be aligned to
+/// // `CACHE_ALIGNMENT` bytes, regardless of whether they're created on the
+/// // stack, heap-allocated, or allocated from a `Scratchpad`.
+/// let cache_aligned = cache_aligned_zeroed!();
+/// assert!(is_cache_aligned(&cache_aligned));
+///
+/// let cache_aligned = Box::new(cache_aligned_zeroed!());
+/// assert!(is_cache_aligned(&*cache_aligned));
+///
+/// let scratchpad = Scratchpad::new(
+///     [cache_aligned_zeroed!(); 1],
+///     [0usize; 1],
+/// );
+/// let marker = scratchpad.mark_front().expect("marker creation failed");
+/// let cache_aligned = marker
+///     .allocate(cache_aligned_zeroed!())
+///     .expect("allocation failed");
+/// assert!(is_cache_aligned(&*cache_aligned));
+/// # }
+/// ```
+///
 /// [`Buffer`]: trait.Buffer.html
 /// [`CACHE_ALIGNMENT`]: constant.CACHE_ALIGNMENT.html
 /// [`Scratchpad`]: struct.Scratchpad.html
 /// [`Tracking`]: trait.Tracking.html
 #[derive(Clone, Copy)]
-#[repr(align(64))]
+#[repr(C, align(64))]
 pub struct CacheAligned(pub [u8; CACHE_ALIGNMENT]);
+
+/// Dummy constant used to verify `CacheAligned` size at compile-time.
+const _ASSERT_CACHE_ALIGNED_SIZE: [(); size_of::<CacheAligned>()
+    - CACHE_ALIGNMENT] = [];
+/// Dummy constant used to verify `CacheAligned` alignment at compile-time.
+const _ASSERT_CACHE_ALIGNED_ALIGNMENT: [(); align_of::<CacheAligned>()
+    - CACHE_ALIGNMENT] = [];
 
 impl fmt::Debug for CacheAligned {
     #[inline]

@@ -406,7 +406,7 @@
 //! use std::mem::MaybeUninit;
 //! use scratchpad::{ByteData, Scratchpad};
 //!
-//! #[repr(align(16))]
+//! #[repr(C, align(16))]
 //! struct Aligned16([u32; 4]);
 //!
 //! unsafe impl ByteData for Aligned16 {}

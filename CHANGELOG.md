@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   `uninitialized_boxed_slice()`, `uninitialized_boxed_slice_for_bytes()`, and
   `uninitialized_boxed_slice_for_markers()`, as well as a note in the "Known
   Issues" section of the crate-level documentation.
+- Add `#[repr(C)]` attribute to `CacheAligned` in order to guarantee
+  consistent data layout. `CacheAligned` is correctly sized and aligned in
+  practice with the default Rust `repr`, but the Rust `repr` technically
+  doesn't guarantee any specific data layout; specifying the `C` `repr` helps
+  us avoid any edge cases that may arise. Existing code should still behave as
+  normal.
 - Updated Travis CI configuration to use `clippy` and `rustfmt` from the
   stable toolchain, and updated the code accordingly (based on the 1.36.0
   toolchain versions).
