@@ -4,6 +4,10 @@ scratchpad
 A Rust library providing a stack-like memory allocator with double-ended
 allocation support.
 
+[![Latest Version](https://img.shields.io/crates/v/scratchpad.svg)](https://crates.io/crates/scratchpad)
+[![Released API docs](https://docs.rs/scratchpad/badge.svg)](https://docs.rs/scratchpad)
+![MIT/Apache-2.0 licensed](https://img.shields.io/crates/l/scratchpad.svg)
+[![Rustc Version 1.25+](https://img.shields.io/badge/rustc-1.25+-lightgray.svg)](https://blog.rust-lang.org/2018/03/29/Rust-1.25.html)
 [![Build Status](https://travis-ci.org/okready/scratchpad.svg?branch=master)](https://travis-ci.org/okready/scratchpad)
 
 - [Documentation](https://docs.rs/scratchpad)
