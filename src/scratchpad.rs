@@ -429,6 +429,16 @@ where
     #[inline(always)]
     pub fn static_new() -> Self {
         #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
+        // LINT: In order to maintain backwards compatibility with
+        //       `scratchpad` versions that predate `MaybeUninit`, we still
+        //       have to allow uninitialized buffer setup for `ByteData` types
+        //       not wrapped by `MaybeUninit`. The method documentation
+        //       mentions the caveats of this and recommends using buffers of
+        //       `MaybeUninit` types whenever possible.
+        #[cfg_attr(
+            feature = "cargo-clippy",
+            allow(clippy::uninit_assumed_init)
+        )]
         return Scratchpad {
             buffer: unsafe { MaybeUninit::uninit().assume_init() },
             markers: RefCell::new(MarkerStacks {
@@ -550,9 +560,9 @@ where
     /// let marker = scratchpad.mark_front().unwrap();
     /// // `marker` can now be used for allocations...
     /// ```
-    pub fn mark_front<'scratchpad>(
-        &'scratchpad self,
-    ) -> Result<MarkerFront<'scratchpad, BufferT, TrackingT>, Error<()>> {
+    pub fn mark_front(
+        &self,
+    ) -> Result<MarkerFront<BufferT, TrackingT>, Error<()>> {
         let mut markers = self.markers.borrow_mut();
 
         // `markers.back` is lazy-initialized when the "unstable" feature is
@@ -596,9 +606,9 @@ where
     /// let marker = scratchpad.mark_back().unwrap();
     /// // `marker` can now be used for allocations...
     /// ```
-    pub fn mark_back<'scratchpad>(
-        &'scratchpad self,
-    ) -> Result<MarkerBack<'scratchpad, BufferT, TrackingT>, Error<()>> {
+    pub fn mark_back(
+        &self,
+    ) -> Result<MarkerBack<BufferT, TrackingT>, Error<()>> {
         let mut markers = self.markers.borrow_mut();
 
         // `markers.back` is lazy-initialized when the "unstable" feature is

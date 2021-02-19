@@ -767,6 +767,9 @@
     all(not(stable_maybe_uninit), feature = "unstable"),
     feature(maybe_uninit)
 )]
+// LINT: Rust 1.25.0 does not support the `dyn` keyword for trait objects, so
+//       we can't make that fix yet.
+#![allow(unknown_lints, bare_trait_objects)]
 // LINT: Disabling `ptr_offset_with_cast` warning since using the pointer
 //       `add` method would break Rust 1.25 compatibility (`add` was not
 //       introduced until 1.26). As of Rust 1.32.0, `add` simply calls

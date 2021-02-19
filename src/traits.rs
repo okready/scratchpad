@@ -241,7 +241,10 @@ where
         self.as_bytes().len() / size_of::<usize>()
     }
 
-    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
+    #[cfg_attr(
+        feature = "cargo-clippy",
+        allow(clippy::cast_ptr_alignment, clippy::size_of_in_element_count)
+    )]
     #[inline]
     fn set(&mut self, index: usize, value: usize) {
         let bytes = self.as_bytes_mut();
@@ -254,7 +257,10 @@ where
         }
     }
 
-    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
+    #[cfg_attr(
+        feature = "cargo-clippy",
+        allow(clippy::cast_ptr_alignment, clippy::size_of_in_element_count)
+    )]
     #[inline]
     fn get(&self, index: usize) -> usize {
         let bytes = self.as_bytes();
@@ -643,6 +649,14 @@ where
     /// ```
     ///
     /// [`SliceLike`]: trait.SliceLike.html
+    // LINT: `wrong_self_convention` lint wasn't present when this method was
+    //       added. Altering it to satisfy the lint warning would be a
+    //       SemVer-breaking change, so it will have to be deferred to a later
+    //       major version.
+    #[cfg_attr(
+        feature = "cargo-clippy",
+        allow(clippy::wrong_self_convention)
+    )]
     fn into_mut_slice_like_ptr(ptr: *mut Self) -> *mut T;
 }
 

@@ -43,10 +43,7 @@ pub trait Marker {
     /// assert_eq!(*x, 3.14159);
     /// ```
     #[inline]
-    fn allocate<'marker, T>(
-        &'marker self,
-        value: T,
-    ) -> Result<Allocation<'marker, T>, Error<(T,)>> {
+    fn allocate<T>(&self, value: T) -> Result<Allocation<T>, Error<(T,)>> {
         unsafe {
             match self.allocate_uninitialized::<T>() {
                 Ok(allocation) => {
@@ -72,9 +69,9 @@ pub trait Marker {
     /// assert_eq!(*x, 0.0);
     /// ```
     #[inline]
-    fn allocate_default<'marker, T: Default>(
-        &'marker self,
-    ) -> Result<Allocation<'marker, T>, Error<()>> {
+    fn allocate_default<T: Default>(
+        &self,
+    ) -> Result<Allocation<T>, Error<()>> {
         self.allocate(Default::default()).map_err(|e| e.map(|_| ()))
     }
 
@@ -100,9 +97,9 @@ pub trait Marker {
     /// assert_eq!(*x, 3.14159);
     /// ```
     #[inline]
-    unsafe fn allocate_uninitialized<'marker, T>(
-        &'marker self,
-    ) -> Result<Allocation<'marker, T>, Error<()>> {
+    unsafe fn allocate_uninitialized<T>(
+        &self,
+    ) -> Result<Allocation<T>, Error<()>> {
         let data =
             self.allocate_memory(align_of::<T>(), size_of::<T>(), 1)?;
 
@@ -127,11 +124,11 @@ pub trait Marker {
     /// assert_eq!(*x, [3.14159, 3.14159, 3.14159]);
     /// ```
     #[inline]
-    fn allocate_array<'marker, T: Clone>(
-        &'marker self,
+    fn allocate_array<T: Clone>(
+        &self,
         len: usize,
         value: T,
-    ) -> Result<Allocation<'marker, [T]>, Error<(T,)>> {
+    ) -> Result<Allocation<[T]>, Error<(T,)>> {
         unsafe {
             self.allocate_array_uninitialized(len)
                 .map(|allocation| {
@@ -161,10 +158,10 @@ pub trait Marker {
     /// assert_eq!(*x, [0.0, 0.0, 0.0]);
     /// ```
     #[inline]
-    fn allocate_array_default<'marker, T: Default>(
-        &'marker self,
+    fn allocate_array_default<T: Default>(
+        &self,
         len: usize,
-    ) -> Result<Allocation<'marker, [T]>, Error<()>> {
+    ) -> Result<Allocation<[T]>, Error<()>> {
         unsafe {
             self.allocate_array_uninitialized(len).map(|allocation| {
                 let data = &mut *allocation.data.as_ptr();
@@ -195,11 +192,11 @@ pub trait Marker {
     /// assert_eq!(*x, [0.0, 1.0, 2.0]);
     /// ```
     #[inline]
-    fn allocate_array_with<'marker, T, F: FnMut(usize) -> T>(
-        &'marker self,
+    fn allocate_array_with<T, F: FnMut(usize) -> T>(
+        &self,
         len: usize,
         mut func: F,
-    ) -> Result<Allocation<'marker, [T]>, Error<()>> {
+    ) -> Result<Allocation<[T]>, Error<()>> {
         unsafe {
             self.allocate_array_uninitialized(len).map(|allocation| {
                 let data = &mut *allocation.data.as_ptr();
@@ -238,10 +235,10 @@ pub trait Marker {
     /// assert_eq!(*x, [3.14159, 4.14159, 5.14159]);
     /// ```
     #[inline]
-    unsafe fn allocate_array_uninitialized<'marker, T>(
-        &'marker self,
+    unsafe fn allocate_array_uninitialized<T>(
+        &self,
         len: usize,
-    ) -> Result<Allocation<'marker, [T]>, Error<()>> {
+    ) -> Result<Allocation<[T]>, Error<()>> {
         let data =
             self.allocate_memory(align_of::<T>(), size_of::<T>(), len)?;
 
@@ -271,10 +268,10 @@ pub trait Marker {
     /// let allocation_slice: &[f64] = &*allocation;
     /// assert_eq!(*allocation_slice, [3.14159, 4.14159, 5.14159]);
     /// ```
-    fn allocate_slice<'marker, T, U>(
-        &'marker self,
+    fn allocate_slice<T, U>(
+        &self,
         values: U,
-    ) -> Result<Allocation<'marker, T>, Error<(U,)>>
+    ) -> Result<Allocation<T>, Error<(U,)>>
     where
         T: SliceLike + ?Sized,
         U: SliceMoveSource<T>,
@@ -327,10 +324,10 @@ pub trait Marker {
     /// let allocation = marker.allocate_slice_clone(message).unwrap();
     /// assert_eq!(&*allocation, "foo");
     /// ```
-    fn allocate_slice_clone<'marker, T, U>(
-        &'marker self,
+    fn allocate_slice_clone<T, U>(
+        &self,
         values: U,
-    ) -> Result<Allocation<'marker, T>, Error<()>>
+    ) -> Result<Allocation<T>, Error<()>>
     where
         T: SliceLike + ?Sized,
         <T as SliceLike>::Element: Clone,
@@ -374,10 +371,10 @@ pub trait Marker {
     /// let allocation = marker.allocate_slice_copy(message).unwrap();
     /// assert_eq!(&*allocation, "foo");
     /// ```
-    fn allocate_slice_copy<'marker, T, U>(
-        &'marker self,
+    fn allocate_slice_copy<T, U>(
+        &self,
         values: U,
-    ) -> Result<Allocation<'marker, T>, Error<()>>
+    ) -> Result<Allocation<T>, Error<()>>
     where
         T: SliceLike + ?Sized,
         <T as SliceLike>::Element: Copy,
@@ -636,10 +633,10 @@ pub trait Marker {
     ///     .unwrap();
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
-    fn concat_slices<'marker, T, U>(
-        &'marker self,
+    fn concat_slices<T, U>(
+        &self,
         values: U,
-    ) -> Result<Allocation<'marker, T>, Error<(U,)>>
+    ) -> Result<Allocation<T>, Error<(U,)>>
     where
         T: ConcatenateSlice + ?Sized,
         U: SliceMoveSourceCollection<T>,
@@ -700,10 +697,10 @@ pub trait Marker {
     ///     .unwrap();
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
-    fn concat_slices_clone<'marker, T, U>(
-        &'marker self,
+    fn concat_slices_clone<T, U>(
+        &self,
         values: U,
-    ) -> Result<Allocation<'marker, T>, Error<()>>
+    ) -> Result<Allocation<T>, Error<()>>
     where
         T: ConcatenateSlice + ?Sized,
         <T as SliceLike>::Element: Clone,
@@ -761,10 +758,10 @@ pub trait Marker {
     ///     .unwrap();
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
-    fn concat_slices_copy<'marker, T, U>(
-        &'marker self,
+    fn concat_slices_copy<T, U>(
+        &self,
         values: U,
-    ) -> Result<Allocation<'marker, T>, Error<()>>
+    ) -> Result<Allocation<T>, Error<()>>
     where
         T: ConcatenateSlice + ?Sized,
         <T as SliceLike>::Element: Copy,
@@ -835,10 +832,7 @@ pub trait Marker {
     /// and behavior are not guaranteed to be consistent across versions of
     /// this crate._**
     #[doc(hidden)]
-    fn is_allocation_at_end<'marker, T, U>(
-        &'marker self,
-        allocation: &Allocation<'marker, T>,
-    ) -> bool
+    fn is_allocation_at_end<T, U>(&self, allocation: &Allocation<T>) -> bool
     where
         T: IntoMutSliceLikePtr<U> + ?Sized,
         U: SliceLike + ?Sized;
@@ -1023,10 +1017,10 @@ where
     /// assert_eq!(*x, 3.14159);
     /// ```
     #[inline(always)]
-    pub fn allocate<'marker, T>(
-        &'marker self,
+    pub fn allocate<T>(
+        &self,
         value: T,
-    ) -> Result<Allocation<'marker, T>, Error<(T,)>> {
+    ) -> Result<Allocation<T>, Error<(T,)>> {
         Marker::allocate(self, value)
     }
 
@@ -1044,9 +1038,9 @@ where
     /// assert_eq!(*x, 0.0);
     /// ```
     #[inline(always)]
-    pub fn allocate_default<'marker, T: Default>(
-        &'marker self,
-    ) -> Result<Allocation<'marker, T>, Error<()>> {
+    pub fn allocate_default<T: Default>(
+        &self,
+    ) -> Result<Allocation<T>, Error<()>> {
         Marker::allocate_default(self)
     }
 
@@ -1072,9 +1066,9 @@ where
     /// assert_eq!(*x, 3.14159);
     /// ```
     #[inline(always)]
-    pub unsafe fn allocate_uninitialized<'marker, T>(
-        &'marker self,
-    ) -> Result<Allocation<'marker, T>, Error<()>> {
+    pub unsafe fn allocate_uninitialized<T>(
+        &self,
+    ) -> Result<Allocation<T>, Error<()>> {
         Marker::allocate_uninitialized(self)
     }
 
@@ -1093,11 +1087,11 @@ where
     /// assert_eq!(*x, [3.14159, 3.14159, 3.14159]);
     /// ```
     #[inline(always)]
-    pub fn allocate_array<'marker, T: Clone>(
-        &'marker self,
+    pub fn allocate_array<T: Clone>(
+        &self,
         len: usize,
         value: T,
-    ) -> Result<Allocation<'marker, [T]>, Error<(T,)>> {
+    ) -> Result<Allocation<[T]>, Error<(T,)>> {
         Marker::allocate_array(self, len, value)
     }
 
@@ -1116,10 +1110,10 @@ where
     /// assert_eq!(*x, [0.0, 0.0, 0.0]);
     /// ```
     #[inline(always)]
-    pub fn allocate_array_default<'marker, T: Default>(
-        &'marker self,
+    pub fn allocate_array_default<T: Default>(
+        &self,
         len: usize,
-    ) -> Result<Allocation<'marker, [T]>, Error<()>> {
+    ) -> Result<Allocation<[T]>, Error<()>> {
         Marker::allocate_array_default(self, len)
     }
 
@@ -1141,11 +1135,11 @@ where
     /// assert_eq!(*x, [0.0, 1.0, 2.0]);
     /// ```
     #[inline(always)]
-    pub fn allocate_array_with<'marker, T, F: FnMut(usize) -> T>(
-        &'marker self,
+    pub fn allocate_array_with<T, F: FnMut(usize) -> T>(
+        &self,
         len: usize,
         func: F,
-    ) -> Result<Allocation<'marker, [T]>, Error<()>> {
+    ) -> Result<Allocation<[T]>, Error<()>> {
         Marker::allocate_array_with(self, len, func)
     }
 
@@ -1175,10 +1169,10 @@ where
     /// assert_eq!(*x, [3.14159, 4.14159, 5.14159]);
     /// ```
     #[inline(always)]
-    pub unsafe fn allocate_array_uninitialized<'marker, T>(
-        &'marker self,
+    pub unsafe fn allocate_array_uninitialized<T>(
+        &self,
         len: usize,
-    ) -> Result<Allocation<'marker, [T]>, Error<()>> {
+    ) -> Result<Allocation<[T]>, Error<()>> {
         Marker::allocate_array_uninitialized(self, len)
     }
 
@@ -1199,10 +1193,10 @@ where
     /// assert_eq!(*allocation_slice, [3.14159, 4.14159, 5.14159]);
     /// ```
     #[inline(always)]
-    pub fn allocate_slice<'marker, T, U>(
-        &'marker self,
+    pub fn allocate_slice<T, U>(
+        &self,
         values: U,
-    ) -> Result<Allocation<'marker, T>, Error<(U,)>>
+    ) -> Result<Allocation<T>, Error<(U,)>>
     where
         T: SliceLike + ?Sized,
         U: SliceMoveSource<T>,
@@ -1225,10 +1219,10 @@ where
     /// assert_eq!(&*allocation, "foo");
     /// ```
     #[inline(always)]
-    pub fn allocate_slice_clone<'marker, T, U>(
-        &'marker self,
+    pub fn allocate_slice_clone<T, U>(
+        &self,
         values: U,
-    ) -> Result<Allocation<'marker, T>, Error<()>>
+    ) -> Result<Allocation<T>, Error<()>>
     where
         T: SliceLike + ?Sized,
         <T as SliceLike>::Element: Clone,
@@ -1253,10 +1247,10 @@ where
     /// assert_eq!(&*allocation, "foo");
     /// ```
     #[inline(always)]
-    pub fn allocate_slice_copy<'marker, T, U>(
-        &'marker self,
+    pub fn allocate_slice_copy<T, U>(
+        &self,
         values: U,
-    ) -> Result<Allocation<'marker, T>, Error<()>>
+    ) -> Result<Allocation<T>, Error<()>>
     where
         T: SliceLike + ?Sized,
         <T as SliceLike>::Element: Copy,
@@ -1427,10 +1421,10 @@ where
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     #[inline(always)]
-    pub fn concat_slices<'marker, T, U>(
-        &'marker self,
+    pub fn concat_slices<T, U>(
+        &self,
         values: U,
-    ) -> Result<Allocation<'marker, T>, Error<(U,)>>
+    ) -> Result<Allocation<T>, Error<(U,)>>
     where
         T: ConcatenateSlice + ?Sized,
         U: SliceMoveSourceCollection<T>,
@@ -1454,10 +1448,10 @@ where
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     #[inline(always)]
-    pub fn concat_slices_clone<'marker, T, U>(
-        &'marker self,
+    pub fn concat_slices_clone<T, U>(
+        &self,
         values: U,
-    ) -> Result<Allocation<'marker, T>, Error<()>>
+    ) -> Result<Allocation<T>, Error<()>>
     where
         T: ConcatenateSlice + ?Sized,
         <T as SliceLike>::Element: Clone,
@@ -1485,10 +1479,10 @@ where
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     #[inline(always)]
-    pub fn concat_slices_copy<'marker, T, U>(
-        &'marker self,
+    pub fn concat_slices_copy<T, U>(
+        &self,
         values: U,
-    ) -> Result<Allocation<'marker, T>, Error<()>>
+    ) -> Result<Allocation<T>, Error<()>>
     where
         T: ConcatenateSlice + ?Sized,
         <T as SliceLike>::Element: Copy,
@@ -1682,10 +1676,10 @@ where
     /// assert_eq!(*x, 3.14159);
     /// ```
     #[inline(always)]
-    pub fn allocate<'marker, T>(
-        &'marker self,
+    pub fn allocate<T>(
+        &self,
         value: T,
-    ) -> Result<Allocation<'marker, T>, Error<(T,)>> {
+    ) -> Result<Allocation<T>, Error<(T,)>> {
         Marker::allocate(self, value)
     }
 
@@ -1703,9 +1697,9 @@ where
     /// assert_eq!(*x, 0.0);
     /// ```
     #[inline(always)]
-    pub fn allocate_default<'marker, T: Default>(
-        &'marker self,
-    ) -> Result<Allocation<'marker, T>, Error<()>> {
+    pub fn allocate_default<T: Default>(
+        &self,
+    ) -> Result<Allocation<T>, Error<()>> {
         Marker::allocate_default(self)
     }
 
@@ -1731,9 +1725,9 @@ where
     /// assert_eq!(*x, 3.14159);
     /// ```
     #[inline(always)]
-    pub unsafe fn allocate_uninitialized<'marker, T>(
-        &'marker self,
-    ) -> Result<Allocation<'marker, T>, Error<()>> {
+    pub unsafe fn allocate_uninitialized<T>(
+        &self,
+    ) -> Result<Allocation<T>, Error<()>> {
         Marker::allocate_uninitialized(self)
     }
 
@@ -1752,11 +1746,11 @@ where
     /// assert_eq!(*x, [3.14159, 3.14159, 3.14159]);
     /// ```
     #[inline(always)]
-    pub fn allocate_array<'marker, T: Clone>(
-        &'marker self,
+    pub fn allocate_array<T: Clone>(
+        &self,
         len: usize,
         value: T,
-    ) -> Result<Allocation<'marker, [T]>, Error<(T,)>> {
+    ) -> Result<Allocation<[T]>, Error<(T,)>> {
         Marker::allocate_array(self, len, value)
     }
 
@@ -1775,10 +1769,10 @@ where
     /// assert_eq!(*x, [0.0, 0.0, 0.0]);
     /// ```
     #[inline(always)]
-    pub fn allocate_array_default<'marker, T: Default>(
-        &'marker self,
+    pub fn allocate_array_default<T: Default>(
+        &self,
         len: usize,
-    ) -> Result<Allocation<'marker, [T]>, Error<()>> {
+    ) -> Result<Allocation<[T]>, Error<()>> {
         Marker::allocate_array_default(self, len)
     }
 
@@ -1800,11 +1794,11 @@ where
     /// assert_eq!(*x, [0.0, 1.0, 2.0]);
     /// ```
     #[inline(always)]
-    pub fn allocate_array_with<'marker, T, F: FnMut(usize) -> T>(
-        &'marker self,
+    pub fn allocate_array_with<T, F: FnMut(usize) -> T>(
+        &self,
         len: usize,
         func: F,
-    ) -> Result<Allocation<'marker, [T]>, Error<()>> {
+    ) -> Result<Allocation<[T]>, Error<()>> {
         Marker::allocate_array_with(self, len, func)
     }
 
@@ -1834,10 +1828,10 @@ where
     /// assert_eq!(*x, [3.14159, 4.14159, 5.14159]);
     /// ```
     #[inline(always)]
-    pub unsafe fn allocate_array_uninitialized<'marker, T>(
-        &'marker self,
+    pub unsafe fn allocate_array_uninitialized<T>(
+        &self,
         len: usize,
-    ) -> Result<Allocation<'marker, [T]>, Error<()>> {
+    ) -> Result<Allocation<[T]>, Error<()>> {
         Marker::allocate_array_uninitialized(self, len)
     }
 
@@ -1858,10 +1852,10 @@ where
     /// assert_eq!(*allocation_slice, [3.14159, 4.14159, 5.14159]);
     /// ```
     #[inline(always)]
-    pub fn allocate_slice<'marker, T, U>(
-        &'marker self,
+    pub fn allocate_slice<T, U>(
+        &self,
         values: U,
-    ) -> Result<Allocation<'marker, T>, Error<(U,)>>
+    ) -> Result<Allocation<T>, Error<(U,)>>
     where
         T: SliceLike + ?Sized,
         U: SliceMoveSource<T>,
@@ -1884,10 +1878,10 @@ where
     /// assert_eq!(&*allocation, "foo");
     /// ```
     #[inline(always)]
-    pub fn allocate_slice_clone<'marker, T, U>(
-        &'marker self,
+    pub fn allocate_slice_clone<T, U>(
+        &self,
         values: U,
-    ) -> Result<Allocation<'marker, T>, Error<()>>
+    ) -> Result<Allocation<T>, Error<()>>
     where
         T: SliceLike + ?Sized,
         <T as SliceLike>::Element: Clone,
@@ -1912,10 +1906,10 @@ where
     /// assert_eq!(&*allocation, "foo");
     /// ```
     #[inline(always)]
-    pub fn allocate_slice_copy<'marker, T, U>(
-        &'marker self,
+    pub fn allocate_slice_copy<T, U>(
+        &self,
         values: U,
-    ) -> Result<Allocation<'marker, T>, Error<()>>
+    ) -> Result<Allocation<T>, Error<()>>
     where
         T: SliceLike + ?Sized,
         <T as SliceLike>::Element: Copy,
@@ -2086,10 +2080,10 @@ where
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     #[inline(always)]
-    pub fn concat_slices<'marker, T, U>(
-        &'marker self,
+    pub fn concat_slices<T, U>(
+        &self,
         values: U,
-    ) -> Result<Allocation<'marker, T>, Error<(U,)>>
+    ) -> Result<Allocation<T>, Error<(U,)>>
     where
         T: ConcatenateSlice + ?Sized,
         U: SliceMoveSourceCollection<T>,
@@ -2113,10 +2107,10 @@ where
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     #[inline(always)]
-    pub fn concat_slices_clone<'marker, T, U>(
-        &'marker self,
+    pub fn concat_slices_clone<T, U>(
+        &self,
         values: U,
-    ) -> Result<Allocation<'marker, T>, Error<()>>
+    ) -> Result<Allocation<T>, Error<()>>
     where
         T: ConcatenateSlice + ?Sized,
         <T as SliceLike>::Element: Clone,
@@ -2144,10 +2138,10 @@ where
     /// assert_eq!(&*combined, "Hello, world!");
     /// ```
     #[inline(always)]
-    pub fn concat_slices_copy<'marker, T, U>(
-        &'marker self,
+    pub fn concat_slices_copy<T, U>(
+        &self,
         values: U,
-    ) -> Result<Allocation<'marker, T>, Error<()>>
+    ) -> Result<Allocation<T>, Error<()>>
     where
         T: ConcatenateSlice + ?Sized,
         <T as SliceLike>::Element: Copy,
