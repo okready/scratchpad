@@ -13,6 +13,12 @@ allocation support.
 - [Documentation](https://docs.rs/scratchpad)
 - [Release notes](https://github.com/okready/scratchpad/releases)
 
+***Note: `scratchpad` is currently in maintenance mode. I've been considering
+doing a major cleanup for some time to get rid of extraneous functionality and
+reduce the surface area of `unsafe` code, but there is currently no timeline
+for this. I'll still apply fixes as needed, but development has otherwise
+stalled.***
+
 `Scratchpad` provides a method for quick and safe dynamic allocations of
 arbitrary types without relying on the global heap (e.g. using `Box` or
 `Vec`). Allocations are made from a fixed-size region of memory in a
