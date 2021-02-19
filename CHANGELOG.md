@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+- Fixed double destruction of elements in the `SliceMoveSource::move_elements`
+  and `SliceMoveSourceCollection::move_all_elements` implementations for
+  arrays and boxed slices when unwinding as the result of a panic in the
+  provided closure ([#1][]).
 
 ## [1.3.0] - 2019-07-21
 ### Added

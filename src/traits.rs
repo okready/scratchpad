@@ -12,18 +12,16 @@ use core::ptr;
 use core::slice;
 use core::str;
 
-use super::CacheAligned;
+use super::{ArrayIter, CacheAligned};
+use core::mem::size_of;
 #[cfg(any(stable_maybe_uninit, feature = "unstable"))]
 use core::mem::MaybeUninit;
-use core::mem::{forget, size_of};
 
 #[cfg(feature = "std")]
 use std::ffi::CStr;
 
 #[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 use super::{Box, Vec};
-#[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
-use core::mem::ManuallyDrop;
 
 /// Trait for types that can be safely used as the backing data type for
 /// storage of arbitrary data.
@@ -868,12 +866,8 @@ where
     where
         F: FnMut(<T as Array>::Item),
     {
-        unsafe {
-            for item in self.as_slice() {
-                f(ptr::read(item))
-            }
-
-            forget(self);
+        for item in ArrayIter::new(self) {
+            f(item);
         }
     }
 }
@@ -888,7 +882,7 @@ where
         F: FnMut(<T as SliceLike>::Element),
     {
         for item in self.as_element_slice() {
-            f(*item)
+            f(*item);
         }
     }
 }
@@ -902,14 +896,13 @@ where
     where
         F: FnMut(<T as SliceLike>::Element),
     {
-        unsafe {
-            for item in self.as_element_slice() {
-                f(ptr::read(item));
-            }
-
+        let boxed_slice = unsafe {
             Box::from_raw((*Box::into_raw(self)).as_element_slice_mut()
-                as *mut [<T as SliceLike>::Element]
-                as *mut [ManuallyDrop<<T as SliceLike>::Element>]);
+                as *mut [T::Element])
+        };
+
+        for item in boxed_slice.into_vec() {
+            f(item);
         }
     }
 }
@@ -1138,12 +1131,8 @@ where
     where
         F: FnMut(<T as SliceLike>::Element),
     {
-        unsafe {
-            for source in self.as_slice() {
-                ptr::read(source).move_elements(&mut f);
-            }
-
-            forget(self);
+        for source in ArrayIter::new(self) {
+            source.move_elements(&mut f);
         }
     }
 }
@@ -1176,12 +1165,8 @@ where
     where
         F: FnMut(<T as SliceLike>::Element),
     {
-        unsafe {
-            for source in &*self {
-                ptr::read(source).move_elements(&mut f);
-            }
-
-            Box::from_raw(Box::into_raw(self) as *mut [ManuallyDrop<U>]);
+        for source in self.into_vec() {
+            source.move_elements(&mut f);
         }
     }
 }

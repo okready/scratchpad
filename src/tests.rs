@@ -18,6 +18,9 @@ use core::mem::MaybeUninit;
 #[cfg(any(feature = "std", feature = "alloc", feature = "unstable"))]
 use super::{Box, Vec};
 
+#[cfg(feature = "std")]
+use std::panic::{self, AssertUnwindSafe};
+
 // Struct that increments a counter each time it is dropped (used for testing
 // for accidental drops due to incorrect moving of values in unsafe code).
 #[derive(Clone, Debug)]
@@ -1150,6 +1153,209 @@ fn slice_move_source_collection_boxed_slice_test() {
     }
 
     assert_eq!(drop_count.get(), 3);
+}
+
+/// Verifies array implementations of `SliceMoveSource` do not drop elements
+/// that have already been moved out of the source during panic unwinds.
+#[test]
+#[cfg(feature = "std")]
+fn slice_move_source_array_panic_unwind_test() {
+    let drop_count = Cell::new(0);
+    let data = [
+        DropCounter::new(&drop_count),
+        DropCounter::new(&drop_count),
+        DropCounter::new(&drop_count),
+    ];
+
+    let mut move_count = 0;
+    panic::catch_unwind(AssertUnwindSafe(|| {
+        data.move_elements(|x| {
+            move_count += 1;
+            if move_count == 2 {
+                panic!();
+            }
+
+            drop(x);
+        });
+    }))
+    .unwrap_or(());
+
+    assert_eq!(drop_count.get(), 3);
+}
+
+/// Verifies boxed slice implementations of `SliceMoveSource` do not drop
+/// elements that have already been moved out of the source during panic
+/// unwinds.
+#[test]
+#[cfg(feature = "std")]
+fn slice_move_source_boxed_slice_panic_unwind_test() {
+    let drop_count = Cell::new(0);
+    let data = vec![
+        DropCounter::new(&drop_count),
+        DropCounter::new(&drop_count),
+        DropCounter::new(&drop_count),
+    ]
+    .into_boxed_slice();
+
+    let mut move_count = 0;
+    panic::catch_unwind(AssertUnwindSafe(|| {
+        data.move_elements(|x| {
+            move_count += 1;
+            if move_count == 2 {
+                panic!();
+            }
+
+            drop(x);
+        });
+    }))
+    .unwrap_or(());
+
+    assert_eq!(drop_count.get(), 3);
+}
+
+/// Verifies vector implementations of `SliceMoveSource` do not drop elements
+/// that have already been moved out of the source during panic unwinds.
+#[test]
+#[cfg(feature = "std")]
+fn slice_move_source_vec_panic_unwind_test() {
+    let drop_count = Cell::new(0);
+    let data = vec![
+        DropCounter::new(&drop_count),
+        DropCounter::new(&drop_count),
+        DropCounter::new(&drop_count),
+    ];
+
+    let mut move_count = 0;
+    panic::catch_unwind(AssertUnwindSafe(|| {
+        data.move_elements(|x| {
+            move_count += 1;
+            if move_count == 2 {
+                panic!();
+            }
+
+            drop(x);
+        });
+    }))
+    .unwrap_or(());
+
+    assert_eq!(drop_count.get(), 3);
+}
+
+/// Verifies array implementations of `SliceMoveSourceCollection` do not drop
+/// elements that have already been moved out of the collection during panic
+/// unwinds.
+#[test]
+#[cfg(feature = "std")]
+fn slice_move_source_collection_array_panic_unwind_test() {
+    let drop_count = Cell::new(0);
+    let data = [
+        [DropCounter::new(&drop_count), DropCounter::new(&drop_count)],
+        [DropCounter::new(&drop_count), DropCounter::new(&drop_count)],
+        [DropCounter::new(&drop_count), DropCounter::new(&drop_count)],
+    ];
+
+    let mut move_count = 0;
+    panic::catch_unwind(AssertUnwindSafe(|| {
+        data.move_all_elements(|x| {
+            move_count += 1;
+            if move_count == 3 {
+                panic!();
+            }
+
+            drop(x);
+        });
+    }))
+    .unwrap_or(());
+
+    assert_eq!(drop_count.get(), 6);
+}
+
+/// Verifies boxed slice implementations of `SliceMoveSourceCollection` do not
+/// drop elements that have already been moved out of the collection during
+/// panic unwinds.
+#[test]
+#[cfg(feature = "std")]
+fn slice_move_source_collection_boxed_slice_panic_unwind_test() {
+    let drop_count = Cell::new(0);
+    let data = vec![
+        [DropCounter::new(&drop_count), DropCounter::new(&drop_count)],
+        [DropCounter::new(&drop_count), DropCounter::new(&drop_count)],
+        [DropCounter::new(&drop_count), DropCounter::new(&drop_count)],
+    ]
+    .into_boxed_slice();
+
+    let mut move_count = 0;
+    panic::catch_unwind(AssertUnwindSafe(|| {
+        data.move_all_elements(|x| {
+            move_count += 1;
+            if move_count == 3 {
+                panic!();
+            }
+
+            drop(x);
+        });
+    }))
+    .unwrap_or(());
+
+    assert_eq!(drop_count.get(), 6);
+}
+
+/// Verifies vector implementations of `SliceMoveSourceCollection` do not drop
+/// elements that have already been moved out of the collection during panic
+/// unwinds.
+#[test]
+#[cfg(feature = "std")]
+fn slice_move_source_collection_vec_panic_unwind_test() {
+    let drop_count = Cell::new(0);
+    let data = vec![
+        [DropCounter::new(&drop_count), DropCounter::new(&drop_count)],
+        [DropCounter::new(&drop_count), DropCounter::new(&drop_count)],
+        [DropCounter::new(&drop_count), DropCounter::new(&drop_count)],
+    ];
+
+    let mut move_count = 0;
+    panic::catch_unwind(AssertUnwindSafe(|| {
+        data.move_all_elements(|x| {
+            move_count += 1;
+            if move_count == 3 {
+                panic!();
+            }
+
+            drop(x);
+        });
+    }))
+    .unwrap_or(());
+
+    assert_eq!(drop_count.get(), 6);
+}
+
+/// Verifies tuple implementations of `SliceMoveSourceCollection` do not drop
+/// elements that have already been moved out of the collection during panic
+/// unwinds.
+#[test]
+#[cfg(feature = "std")]
+fn slice_move_source_collection_tuple_panic_unwind_test() {
+    let drop_count = Cell::new(0);
+    let data = (
+        [DropCounter::new(&drop_count), DropCounter::new(&drop_count)],
+        [DropCounter::new(&drop_count), DropCounter::new(&drop_count)],
+        [DropCounter::new(&drop_count), DropCounter::new(&drop_count)],
+    );
+
+    let mut move_count = 0;
+    panic::catch_unwind(AssertUnwindSafe(|| {
+        data.move_all_elements(|x| {
+            move_count += 1;
+            if move_count == 3 {
+                panic!();
+            }
+
+            drop(x);
+        });
+    }))
+    .unwrap_or(());
+
+    assert_eq!(drop_count.get(), 6);
 }
 
 /// Verifies ZST allocations work properly.

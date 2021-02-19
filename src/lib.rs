@@ -820,5 +820,8 @@ pub use scratchpad::*;
 pub use traits::*;
 pub use utility::*;
 
+mod array_iter;
+pub(crate) use array_iter::*;
+
 #[cfg(test)]
 mod tests;
